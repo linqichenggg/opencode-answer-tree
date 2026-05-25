@@ -42,6 +42,12 @@ export type CaptureStatus = {
   updatedAt: string;
 };
 
+export type SessionMessageSnapshot = {
+  messageId?: string;
+  content: string;
+  createdAt: string;
+};
+
 export type AnswerTreeState = {
   version: 1;
   activeNodeId: string | null;
@@ -55,6 +61,7 @@ export type AnswerTreeState = {
       activeNodeId: string | null;
       lastQuestionId: string | null;
       lastCapture?: CaptureStatus;
+      lastUserMessage?: SessionMessageSnapshot;
     }
   >;
 };

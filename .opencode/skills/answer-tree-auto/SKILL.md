@@ -9,13 +9,17 @@ Use this skill to keep Answer Tree updated during normal chat. The user should b
 
 ## Goal
 
-Maintain this flow:
+Maintain multiple trees inside one OpenCode session:
 
 ```text
-long answer node
-  -> user follow-up question
-    -> assistant follow-up answer saved as child node
+session
+  root topic A
+    -> follow-up answer saved as child node
+  root topic B
+    -> follow-up answer saved as child node
 ```
+
+There is only one active node/context at a time. The user can switch focus between topics in the sidebar; follow-up questions attach to the active node only when the user clearly refers to that context.
 
 Prefer quiet automation. Do not ask the user to manually call `answer_tree_*` tools unless a required tool is unavailable or the target node is ambiguous.
 
@@ -35,11 +39,17 @@ Do not track when:
 - The answer will be short and unlikely to become a future branch.
 - You cannot infer which existing node the question belongs to and there is no active node.
 
-When unsure, use the active node. If there is no active node or the target is genuinely ambiguous, answer normally and mention that no Answer Tree node was created.
+New-topic rule:
+
+- Treat a fresh topic as a new root node even when an active node exists.
+- Fresh-topic examples: "what is CNN", "解释 CNN 是什么", "介绍一下 RAG", "对比 CNN 和 Transformer", "新话题".
+- Only attach under the active node when the user clearly says "继续", "这个", "这里", "上面", "刚才", "第 2 点", "当前节点", "this section", "above", "previous", or names a visible node/section.
+
+When unsure whether the user changed topic, prefer a new root node. Use the active node only when the message has a clear follow-up reference.
 
 ## Workflow A: Follow-Up On Current Active Node
 
-Use when the user asks a follow-up about the currently selected/active answer.
+Use when the user asks a clear follow-up about the currently selected/active answer.
 
 1. Call `answer_tree_prompt_current` with the user's question.
 2. Read the returned context path and use it to answer.
@@ -53,6 +63,8 @@ Skip step 3 when the answer is short, procedural, or not worth future follow-up.
 ## Workflow B: New Standalone Long Answer
 
 Use when the user asks for a fresh long answer that is not a follow-up to an existing node.
+
+Use this workflow even if an active node exists, as long as the user asks about a different topic.
 
 1. Answer the user normally.
 2. If the answer is long or structured enough to become a root node, call `answer_tree_create` with:

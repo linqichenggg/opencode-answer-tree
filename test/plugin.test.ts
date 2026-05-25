@@ -207,7 +207,7 @@ test("OpenCode plugin auto-captures pending follow-up answers as child nodes", a
     );
     await tools.answer_tree_prompt_current.execute(
       {
-        question: "Explain this part",
+        question: "continue explain this part",
       },
       { sessionID: "ses_child" },
     );
@@ -235,6 +235,121 @@ test("OpenCode plugin auto-captures pending follow-up answers as child nodes", a
     assert.equal(child.metadata.opencodeMessageId, "msg_child");
     assert.equal(tree.state.sessions?.ses_child?.lastCapture?.status, "saved");
     assert.equal(tree.state.sessions?.ses_child?.lastCapture?.mode, "child");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode plugin treats clear new topics as new root nodes inside one session", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
+
+  try {
+    const plugin = await AnswerTreePlugin({
+      directory: dir,
+      client: { app: { log: async () => undefined } },
+    } as never);
+    const tools = (plugin as never as { tool: ToolMap }).tool;
+
+    await tools.answer_tree_create.execute(
+      {
+        content: "Transformer root",
+        title: "Transformer",
+      },
+      { sessionID: "ses_multi_topic" },
+    );
+    await tools.answer_tree_prompt_current.execute(
+      {
+        question: "what is CNN",
+      },
+      { sessionID: "ses_multi_topic" },
+    );
+    await (plugin as never as EventPlugin).event({
+      event: {
+        type: "message.updated",
+        properties: {
+          message: {
+            id: "msg_cnn",
+            role: "assistant",
+            sessionID: "ses_multi_topic",
+            content: [
+              "CNN is a convolutional neural network.",
+              "",
+              "- Convolution filters scan local regions.",
+              "- Pooling reduces spatial size.",
+              "- Stacked layers learn higher-level features.",
+            ].join("\n"),
+          },
+        },
+      },
+    });
+
+    const tree = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+    const roots = Object.values(tree.state.nodes).filter((node) => !node.parentId);
+
+    assert.equal(roots.length, 2);
+    assert.equal(tree.state.sessions?.ses_multi_topic?.lastCapture?.mode, "root");
+    assert.equal(tree.state.sessions?.ses_multi_topic?.lastQuestionId, null);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode plugin records latest user message and uses it for follow-up routing", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
+
+  try {
+    const plugin = await AnswerTreePlugin({
+      directory: dir,
+      client: { app: { log: async () => undefined } },
+    } as never);
+    const tools = (plugin as never as { tool: ToolMap }).tool;
+
+    await tools.answer_tree_create.execute(
+      {
+        content: "Root answer content",
+        title: "Root",
+      },
+      { sessionID: "ses_user_route" },
+    );
+    await tools.answer_tree_prompt_current.execute(
+      {
+        question: "what is CNN",
+      },
+      { sessionID: "ses_user_route" },
+    );
+    await (plugin as never as EventPlugin).event({
+      event: {
+        type: "message.updated",
+        properties: {
+          message: {
+            id: "msg_user_follow",
+            role: "user",
+            sessionID: "ses_user_route",
+            content: "继续解释这个节点",
+          },
+        },
+      },
+    });
+    await (plugin as never as EventPlugin).event({
+      event: {
+        type: "message.updated",
+        properties: {
+          message: {
+            id: "msg_user_routed_child",
+            role: "assistant",
+            sessionID: "ses_user_route",
+            content: "First paragraph explains the current node.\n\nSecond paragraph keeps enough detail.",
+          },
+        },
+      },
+    });
+
+    const tree = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+    const nodes = Object.values(tree.state.nodes);
+
+    assert.equal(nodes.filter((node) => node.parentId).length, 1);
+    assert.equal(tree.state.sessions?.ses_user_route?.lastUserMessage?.content, "继续解释这个节点");
+    assert.equal(tree.state.sessions?.ses_user_route?.lastCapture?.mode, "child");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

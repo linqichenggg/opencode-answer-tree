@@ -39,6 +39,15 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
 
   return {
     event: async ({ event }: { event: unknown }) => {
+      const userMessage = extractUserMessage(event);
+      if (userMessage) {
+        await mkdir(join(pluginCtx.directory, STORE_DIR), { recursive: true });
+        await withTree((tree) => {
+          recordSessionUserMessage(tree, userMessage.sessionID, userMessage);
+        });
+        return;
+      }
+
       const message = extractAssistantMessage(event);
       if (!message) return;
 
@@ -58,7 +67,10 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
         }
 
         const question = getSessionLastQuestion(tree, message.sessionID);
-        const shouldAttachToQuestion = Boolean(question && !question.answerNodeId);
+        const latestUserText = getSessionLatestUserText(tree, message.sessionID) ?? question?.question ?? "";
+        const shouldAttachToQuestion = Boolean(
+          question && !question.answerNodeId && isFollowUpQuestion(latestUserText),
+        );
         const decision = shouldAutoCapture(message.content, shouldAttachToQuestion ? "child" : "root");
 
         if (!decision.capture) {
@@ -100,7 +112,7 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
             capturedBy: "message.updated",
           },
         });
-        setSessionActive(tree, message.sessionID, node.id);
+        setSessionActive(tree, message.sessionID, node.id, null);
         setCaptureStatus(tree, message.sessionID, {
           status: "saved",
           reason: decision.reason,
@@ -131,7 +143,7 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
                 createdBy: "tool.answer_tree_create",
               },
             });
-            setSessionActive(tree, toolCtx?.sessionID, node.id);
+            setSessionActive(tree, toolCtx?.sessionID, node.id, null);
             return `Saved ${node.id}: ${node.title} (${node.segments.length} segments)`;
           });
         },
@@ -193,7 +205,7 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
         async execute(args, toolCtx?: ToolContext) {
           return withTree((tree) => {
             const node = tree.setCurrentNode(args.nodeId);
-            setSessionActive(tree, toolCtx?.sessionID, node.id);
+            setSessionActive(tree, toolCtx?.sessionID, node.id, null);
             return `Current: ${node.id} ${node.title} (${node.segments.length} segments)`;
           });
         },
@@ -210,7 +222,7 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
             if (matches.length === 0) return `No Answer Tree node matched: ${args.query}`;
 
             const node = tree.setCurrentNode(matches[0].id);
-            setSessionActive(tree, toolCtx?.sessionID, node.id);
+            setSessionActive(tree, toolCtx?.sessionID, node.id, null);
             const lines = [`Current: ${node.id} ${node.title} (${node.segments.length} segments)`];
             if (matches.length > 1) {
               lines.push("");
@@ -381,6 +393,48 @@ function extractAssistantMessage(
   };
 }
 
+function extractUserMessage(
+  event: unknown,
+): { messageId: string; content: string; sessionID?: string } | null {
+  const message = extractMessageByRole(event, "user");
+  if (!message) return null;
+  return {
+    messageId: message.messageId,
+    content: message.content,
+    sessionID: message.sessionID,
+  };
+}
+
+function extractMessageByRole(
+  event: unknown,
+  expectedRole: "assistant" | "user",
+): { messageId: string; content: string; title: string; sessionID?: string } | null {
+  const record = event as Record<string, unknown>;
+  if (record?.type !== "message.updated") return null;
+
+  const payload = (record.properties ?? record) as Record<string, unknown>;
+  const message = (payload.message ?? payload) as Record<string, unknown>;
+  const role = String(message.role ?? message.author ?? "");
+  if (role !== expectedRole) return null;
+
+  const content = extractText(message);
+  if (!content) return null;
+
+  return {
+    messageId: String(message.id ?? message.messageId ?? `manual_${Date.now()}`),
+    content,
+    title: inferTitle(content),
+    sessionID: firstString(
+      message.sessionID,
+      message.sessionId,
+      payload.sessionID,
+      payload.sessionId,
+      record.sessionID,
+      record.sessionId,
+    ),
+  };
+}
+
 function sessionMetadata(sessionID: string | undefined): Record<string, unknown> {
   return sessionID ? { opencodeSessionId: sessionID } : {};
 }
@@ -396,12 +450,31 @@ function setSessionActive(
   tree: AnswerTree,
   sessionID: string | undefined,
   nodeId: string,
-  questionId?: string,
+  questionId?: string | null,
 ): void {
   const session = getSession(tree, sessionID);
   if (!session) return;
   session.activeNodeId = nodeId;
-  if (questionId) session.lastQuestionId = questionId;
+  if (questionId !== undefined) session.lastQuestionId = questionId;
+}
+
+function recordSessionUserMessage(
+  tree: AnswerTree,
+  sessionID: string | undefined,
+  input: { messageId?: string; content: string },
+): void {
+  const session = getSession(tree, sessionID);
+  if (!session) return;
+  session.lastUserMessage = {
+    messageId: input.messageId,
+    content: input.content.trim(),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function getSessionLatestUserText(tree: AnswerTree, sessionID: string | undefined): string | undefined {
+  const session = getSession(tree, sessionID);
+  return session?.lastUserMessage?.content;
 }
 
 function setCaptureStatus(
@@ -582,6 +655,60 @@ function shouldAutoCapture(
     capture: false,
     reason: `too short: ${stats.charCount} chars, ${stats.paragraphCount} paragraphs, ${stats.bulletCount} bullets`,
   };
+}
+
+function isFollowUpQuestion(input: string): boolean {
+  const normalized = normalizeForMatch(input);
+  if (!normalized) return false;
+
+  const explicitNewTopicPatterns = [
+    /\bnew topic\b/u,
+    /新话题/u,
+    /换个话题/u,
+    /另一个话题/u,
+    /另外/u,
+  ];
+  if (explicitNewTopicPatterns.some((pattern) => pattern.test(normalized))) return false;
+
+  const followUpPatterns = [
+    /继续/u,
+    /展开/u,
+    /详细说/u,
+    /进一步/u,
+    /这个/u,
+    /这里/u,
+    /这部分/u,
+    /这一/u,
+    /上面/u,
+    /刚才/u,
+    /当前/u,
+    /节点/u,
+    /第\s*\d+/u,
+    /\bcontinue\b/u,
+    /\bfollow up\b/u,
+    /\bthis\b/u,
+    /\bthat\b/u,
+    /\babove\b/u,
+    /\bprevious\b/u,
+    /\bcurrent\b/u,
+    /\bsection\b/u,
+    /\bpoint\b/u,
+    /\bnode\b/u,
+  ];
+  if (followUpPatterns.some((pattern) => pattern.test(normalized))) return true;
+
+  const generalNewTopicPatterns = [
+    /\bwhat is\b/u,
+    /\bexplain\b/u,
+    /\bintroduce\b/u,
+    /\bcompare\b/u,
+    /解释.*是什么/u,
+    /介绍/u,
+    /对比/u,
+  ];
+  if (generalNewTopicPatterns.some((pattern) => pattern.test(normalized))) return false;
+
+  return false;
 }
 
 function contentStats(content: string): { charCount: number; paragraphCount: number; bulletCount: number } {
