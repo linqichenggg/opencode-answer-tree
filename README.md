@@ -2,25 +2,193 @@
 
 [中文](README.md) | [English](README.en.md)
 
-Answer Tree 是一个面向 OpenCode 的长回答追问工作区。它把 LLM 的长回答保存成可分段、可追问、可继续嵌套的树状结构，避免在聊天时间线里反复往上翻。
+OpenCode Answer Tree 是一个带右侧回答树的 OpenCode 工作区。它把长回答保存成可追问的树节点，让你在多层追问和多个话题之间切换时，不需要反复翻聊天历史。
 
-## 当前完成内容
+## 解决什么问题
 
-- 核心库：回答节点、自动分段、问题记录、子回答挂接、路径追踪、Markdown 导出。
-- CLI：可以不依赖 OpenCode 独立验证完整流程。
-- OpenCode 插件：提供自动捕获长回答的事件 hook 和一组 custom tools。
-- OpenCode 宿主：`opencode-host/` 内置右侧 Answer Tree sidebar、active context、节点详情和快捷键操作。
-- 节点编号：树、TUI 和 Markdown 导出中显示 `1`、`1.1`、`1.1.1` 这类层级编号。
-- 测试：覆盖切段、嵌套追问和本地持久化。
+LLM 一次回答很长时，后续经常会出现这些问题：
 
-## 安装
+- 想追问某一段，但要先往上翻很久。
+- 问了几层之后，已经分不清当前问题基于哪段回答。
+- 同一个 session 里聊多个话题时，历史会混在一起。
+- 需要复盘、导出、分享时，聊天时间线不如树结构清楚。
 
-```bash
-npm install
-npm run build
+Answer Tree 的目标是把普通聊天变成这种结构：
+
+```text
+1 Transformer 架构详解
+  1.1 Self-Attention QKV
+  1.2 多头注意力机制
+    1.2.1 每个注意力头如何产生
+
+2 CNN 架构详解
+  2.1 卷积核是什么
 ```
 
-## CLI 快速试用
+每个 OpenCode session 可以有多棵根树，但同一时间只有一个 active context。你可以用右侧 sidebar 在不同话题之间切换焦点，左侧聊天历史会跟着跳到对应回答。
+
+## 当前能力
+
+- 自动保存长回答或结构化回答为根节点。
+- 明确追问当前节点时，自动保存为子节点。
+- 同一个 session 支持多个根话题。
+- 右侧 Answer Tree sidebar 显示树、编号、selected 节点和 active context。
+- `j/k` 切换节点时，左侧聊天历史同步滚动到对应回答。
+- `enter` 把 selected 节点设为新的 active context。
+- 节点编号显示为 `1`、`1.1`、`1.1.1`。
+- 支持重命名、删除、查看完整节点、模糊切换节点。
+- 支持 CLI、独立 TUI viewer、Markdown 导出。
+- 一条命令 `npm run validate` 验证主项目和内置 OpenCode host。
+
+## 快速开始
+
+环境要求：
+
+```text
+Node.js >= 20
+npm
+Bun
+```
+
+从 GitHub clone 后：
+
+```bash
+git clone https://github.com/linqichenggg/opencode-answer-tree.git
+cd opencode-answer-tree
+npm run setup
+npm run opencode
+```
+
+`npm run setup` 会做三件事：
+
+```text
+安装 Answer Tree 依赖
+安装内置 OpenCode host 依赖
+构建 Answer Tree
+```
+
+启动后请用这个入口：
+
+```bash
+npm run opencode
+```
+
+直接运行全局 `opencode` 会进入原版 OpenCode。Answer Tree 右侧面板只在 `npm run opencode` 启动的版本里出现。
+
+## 第一次试用流程
+
+进入 `npm run opencode` 后，按下面流程试：
+
+1. 问一个会产生长回答的问题：
+
+```text
+请详细解释 Transformer 架构
+```
+
+2. 回答结束后，右侧应该出现第一棵树：
+
+```text
+1 Transformer 架构详解
+```
+
+3. 继续围绕当前回答追问：
+
+```text
+继续解释 self-attention 这一部分
+```
+
+4. 如果回答足够长或结构化，右侧会出现子节点：
+
+```text
+1 Transformer 架构详解
+  1.1 Self-Attention 解释
+```
+
+5. 换一个新话题：
+
+```text
+what is CNN
+```
+
+6. 新话题会成为新的根节点：
+
+```text
+1 Transformer 架构详解
+2 CNN 解释
+```
+
+## Sidebar 操作
+
+```text
+ctrl+x z  进入 Answer Tree 模式
+j/k       选择上一个 / 下一个节点
+enter     把 selected 节点设为 active context
+r         刷新
+esc/q     回到聊天
+```
+
+界面里的两个状态：
+
+```text
+Selected        当前光标选中的节点
+Active context  后续追问会基于的节点
+```
+
+当你用 `j/k` 移动 selected 节点时，左侧聊天历史会尝试跳到对应回答。按 `enter` 后，selected 节点会变成新的 active context。
+
+## 自动生成规则
+
+新话题会生成根节点，例如：
+
+```text
+what is CNN
+解释 CNN 是什么
+介绍一下 RAG
+对比 CNN 和 Transformer
+新话题：解释 diffusion model
+```
+
+明确追问当前节点会生成子节点，例如：
+
+```text
+继续解释这个
+展开第 2 点
+这里为什么这样设计
+上面那段是什么意思
+当前节点里的 QKV 是什么
+```
+
+当前底层保存阈值：
+
+```text
+根节点：超过 600 字符，或 3 个以上 bullet，或 3 段以上
+子节点：超过 300 字符，或 2 个以上 bullet，或 2 段以上
+```
+
+太短的回答会跳过，sidebar 会显示最近一次结果：
+
+```text
+Last answer: saved #ans_xxxxxxxx
+Last answer: skipped
+```
+
+## 数据保存位置
+
+Answer Tree 数据保存在项目目录：
+
+```text
+.answer-tree/opencode-state.json
+```
+
+CLI 默认数据保存在：
+
+```text
+.answer-tree/state.json
+```
+
+这些文件是本地状态文件，不需要提交到 GitHub。
+
+## CLI 用法
 
 创建根回答：
 
@@ -46,18 +214,6 @@ node dist/src/cli/index.js list --store opencode
 node dist/src/cli/index.js show <nodeId>
 ```
 
-针对某个片段生成追问 prompt：
-
-```bash
-node dist/src/cli/index.js ask <nodeId> "为什么这里需要树结构？" --segment 3
-```
-
-把模型回答挂成子节点：
-
-```bash
-node dist/src/cli/index.js attach <questionId> "这里需要树结构，因为回答本身还会继续产生新的追问。"
-```
-
 围绕当前节点连续追问：
 
 ```bash
@@ -70,85 +226,10 @@ node dist/src/cli/index.js attach-last "这是上一问的回答" --title "子�
 导出：
 
 ```bash
-node dist/src/cli/index.js export --out answer-tree.md
-```
-
-导出 OpenCode 插件保存的数据：
-
-```bash
 node dist/src/cli/index.js export --store opencode --out answer-tree.md
 ```
 
-CLI 默认状态保存在当前项目的 `.answer-tree/state.json`。OpenCode 插件状态保存在 `.answer-tree/opencode-state.json`。CLI 可以用 `--store opencode` 读取插件数据，也可以用 `--store <path>` 指定任意状态文件。
-
-## OpenCode 插件用法
-
-当前插件入口在：
-
-```text
-src/plugin/opencode.ts
-```
-
-当前项目已经放了一个本地插件加载文件：
-
-```text
-.opencode/plugins/answer-tree.js
-```
-
-先构建：
-
-```bash
-npm run build
-```
-
-然后在当前目录启动 OpenCode 时，OpenCode 会加载这个项目级插件。
-
-如果要启动带右侧 Answer Tree 面板的 OpenCode：
-
-```bash
-npm run opencode
-```
-
-默认使用本仓库内的 OpenCode 宿主源码：
-
-```text
-opencode-host/packages/opencode
-```
-
-正常开发不需要第二个本地仓库。如果临时调试其他 OpenCode 源码副本，可以覆盖宿主目录：
-
-```bash
-OPENCODE_FORK_DIR=/path/to/opencode-host npm run opencode
-```
-
-构建后也可以通过 npm 插件方式接入 OpenCode，导出路径是：
-
-```text
-opencode-answer-tree/plugin
-```
-
-插件提供这些 tools：
-
-- `answer_tree_create`：保存一段长回答为根节点。
-- `answer_tree_list`：列出回答树。
-- `answer_tree_show`：显示某个节点的分段。
-- `answer_tree_show_full`：显示某个节点的完整内容。
-- `answer_tree_current`：显示当前节点和最近问题。
-- `answer_tree_use`：切换当前节点。
-- `answer_tree_use_match`：按标题或来源问题模糊匹配并切换当前节点。
-- `answer_tree_rename`：重命名节点。
-- `answer_tree_delete`：删除节点，默认保护有子节点的节点。
-- `answer_tree_prompt`：记录问题并生成带上下文的 prompt。
-- `answer_tree_prompt_current`：基于当前节点追问。
-- `answer_tree_attach`：把回答挂接成子节点。
-- `answer_tree_attach_last`：把回答挂到最近问题下面。
-- `answer_tree_export`：导出 Markdown。
-
-插件也会监听 `message.updated`，当 assistant 消息长度超过阈值时自动保存为回答节点。这个事件结构需要在真实 OpenCode 会话中继续核验。
-
-节点会继续保存在项目目录的 `.answer-tree/opencode-state.json`。OpenCode 工具调用和自动捕获会给新节点写入 `opencodeSessionId`，并为每个 OpenCode 会话单独记录当前节点和最近问题。右侧 sidebar 默认只显示当前 OpenCode 会话相关的节点。旧版本生成的节点没有 session metadata，会被视为 legacy project nodes，不会在新会话里混进当前树。
-
-项目还提供这些 OpenCode slash commands：
+## OpenCode Slash Commands
 
 ```text
 /tree-list
@@ -166,24 +247,7 @@ opencode-answer-tree/plugin
 /tree-export
 ```
 
-这些命令位于 `.opencode/commands/`，底层仍然会要求模型调用对应的 `answer_tree_*` tool。
-
-## Answer Tree 自动 skill
-
-项目级 skill 位于：
-
-```text
-.opencode/skills/answer-tree-auto/SKILL.md
-```
-
-它会指导模型在普通聊天时自动判断是否需要更新 Answer Tree：
-
-- 用户围绕当前 active node 追问时，优先调用 `answer_tree_prompt_current`。
-- 回答足够长、后续可能继续追问时，调用 `answer_tree_attach_last` 保存为子节点。
-- 用户要求新的长内容分析时，回答后调用 `answer_tree_create` 保存为根节点。
-- 问候、短问题、运行调试、UI 操作等不会写入树。
-
-这是模型行为层自动化：它让模型主动调用已有 tools。它还不是底层事件监听，所以最终是否保存仍取决于模型是否正确触发 skill 和 tools。
+这些命令位于 `.opencode/commands/`，底层会调用对应的 `answer_tree_*` tool。
 
 ## TUI Viewer
 
@@ -209,22 +273,46 @@ r            重新读取状态文件
 q            退出
 ```
 
-## 验证
+## 开发验证
 
 ```bash
 npm run validate
 ```
 
-这条命令会依次运行主项目测试、CLI/TUI smoke 测试和内置 OpenCode 宿主的 typecheck。也可以单独运行：
+这条命令会依次运行：
+
+```text
+主项目测试
+CLI/TUI smoke 测试
+内置 OpenCode host typecheck
+```
+
+也可以单独运行：
 
 ```bash
 npm test
 npm run smoke
 ```
 
-## 产品边界
+## 项目结构
 
-这个版本先解决“长回答和套娃追问如何被保存、定位和复用”。当前仓库已经内置 OpenCode 宿主源码，可以在右侧查看当前会话树、切换 active node、查看 active context，并在切换节点时跳转到左侧对应回答历史。它还没有发布成普通用户一键安装的 OpenCode 版本。
+```text
+src/core        Answer Tree 数据模型、分段、挂接、导出
+src/plugin      OpenCode tools 和自动捕获逻辑
+src/cli         命令行工具
+src/tui         独立 TUI viewer
+.opencode       OpenCode commands / skill / plugin loader
+opencode-host   内置 OpenCode 宿主源码，包含右侧 sidebar
+docs            设计、验证和后续计划
+```
+
+## 当前边界
+
+- 这是内置 OpenCode host 的一仓库版本。
+- 普通全局 `opencode` 命令仍然是原版 OpenCode。
+- Answer Tree 版需要通过 `npm run opencode` 启动。
+- 还没有发布成普通用户一键安装的 OpenCode 发行版。
+- 旧节点如果没有 `opencodeMessageId`，左侧跳转会使用内容和时间兜底匹配。
 
 更多说明见：
 
@@ -232,8 +320,6 @@ npm run smoke
 - `docs/ARCHITECTURE.md`
 - `docs/COMMANDS.md`
 - `docs/TUI.md`
-- `docs/FORK_PLAN.md`
-- `docs/UPSTREAM_SPIKE.md`
 - `docs/SELF_REVIEW.md`
 - `docs/VALIDATION.md`
 - `docs/NEXT_STEPS.md`

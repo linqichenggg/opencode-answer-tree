@@ -2,25 +2,193 @@
 
 [中文](README.md) | [English](README.en.md)
 
-Answer Tree is a long-answer follow-up workspace for OpenCode. It saves long LLM answers as tree nodes that can be segmented, questioned, nested, and revisited without scrolling through a long chat timeline.
+OpenCode Answer Tree is an OpenCode workspace with a right-side answer tree. It turns long LLM answers into follow-up nodes, so you can switch between nested questions and multiple topics without scrolling through the chat timeline.
+
+## What It Solves
+
+Long LLM answers often create these problems:
+
+- You want to ask about one section, but first you need to scroll back.
+- After several follow-up questions, it becomes unclear which answer the current question depends on.
+- Multiple topics in one session become mixed together.
+- Chat timelines are hard to review, export, or share.
+
+Answer Tree turns normal chat into this structure:
+
+```text
+1 Transformer architecture
+  1.1 Self-Attention QKV
+  1.2 Multi-head attention
+    1.2.1 How each attention head is formed
+
+2 CNN architecture
+  2.1 What a convolution kernel is
+```
+
+One OpenCode session can contain multiple root trees, while only one active context is used at a time. You can switch focus in the right sidebar, and the left chat history scrolls to the matching answer.
 
 ## Current Features
 
-- Core library: answer nodes, automatic segmentation, question records, child-answer attachment, path tracking, and Markdown export.
-- CLI: verifies the full workflow without depending on OpenCode.
-- OpenCode plugin: provides event hooks for automatically capturing long answers and a set of custom tools.
-- OpenCode host: `opencode-host/` includes the right-side Answer Tree sidebar, active context, node details, and keyboard operations.
-- Node numbering: tree views, TUI, and Markdown export show hierarchical numbers such as `1`, `1.1`, and `1.1.1`.
-- Tests: cover segmentation, nested follow-up questions, and local persistence.
+- Automatically saves long or structured answers as root nodes.
+- Automatically saves clear follow-up answers as child nodes.
+- Supports multiple root topics in one session.
+- Right-side Answer Tree sidebar with numbering, selected node, and active context.
+- `j/k` node navigation scrolls the left chat history to the matching answer.
+- `enter` sets the selected node as the new active context.
+- Node numbers use `1`, `1.1`, and `1.1.1`.
+- Rename, delete, show full node, and fuzzy node switching tools.
+- CLI, standalone TUI viewer, and Markdown export.
+- One validation command: `npm run validate`.
 
-## Installation
+## Quick Start
 
-```bash
-npm install
-npm run build
+Requirements:
+
+```text
+Node.js >= 20
+npm
+Bun
 ```
 
-## CLI Quick Start
+After cloning from GitHub:
+
+```bash
+git clone https://github.com/linqichenggg/opencode-answer-tree.git
+cd opencode-answer-tree
+npm run setup
+npm run opencode
+```
+
+`npm run setup` does three things:
+
+```text
+Installs Answer Tree dependencies
+Installs bundled OpenCode host dependencies
+Builds Answer Tree
+```
+
+Start with this command:
+
+```bash
+npm run opencode
+```
+
+Running the global `opencode` command starts the original OpenCode. The Answer Tree sidebar appears only in the version launched with `npm run opencode`.
+
+## First Trial Flow
+
+After entering `npm run opencode`, try this:
+
+1. Ask a question that produces a long answer:
+
+```text
+Please explain Transformer architecture in detail
+```
+
+2. After the answer finishes, the first tree should appear on the right:
+
+```text
+1 Transformer architecture
+```
+
+3. Ask a follow-up about the current answer:
+
+```text
+Continue explaining the self-attention part
+```
+
+4. If the answer is long or structured enough, a child node appears:
+
+```text
+1 Transformer architecture
+  1.1 Self-Attention explanation
+```
+
+5. Switch to a new topic:
+
+```text
+what is CNN
+```
+
+6. The new topic becomes another root node:
+
+```text
+1 Transformer architecture
+2 CNN explanation
+```
+
+## Sidebar Controls
+
+```text
+ctrl+x z  Enter Answer Tree mode
+j/k       Select previous / next node
+enter     Set selected node as active context
+r         Refresh
+esc/q     Return to chat
+```
+
+Sidebar states:
+
+```text
+Selected        The node currently highlighted by the cursor
+Active context  The node used as context for future follow-up questions
+```
+
+When you move the selected node with `j/k`, the left chat history tries to scroll to the matching answer. Pressing `enter` makes the selected node the new active context.
+
+## Auto-Capture Rules
+
+New topics become root nodes, for example:
+
+```text
+what is CNN
+explain what CNN is
+introduce RAG
+compare CNN and Transformer
+new topic: explain diffusion models
+```
+
+Clear follow-ups become child nodes, for example:
+
+```text
+continue explaining this
+expand point 2
+why is this designed this way
+what does the above paragraph mean
+what is QKV in the current node
+```
+
+Current save thresholds:
+
+```text
+Root node: more than 600 characters, or 3+ bullets, or 3+ paragraphs
+Child node: more than 300 characters, or 2+ bullets, or 2+ paragraphs
+```
+
+Short answers are skipped, and the sidebar shows the latest result:
+
+```text
+Last answer: saved #ans_xxxxxxxx
+Last answer: skipped
+```
+
+## Data Location
+
+OpenCode plugin data is stored in the project directory:
+
+```text
+.answer-tree/opencode-state.json
+```
+
+CLI data is stored at:
+
+```text
+.answer-tree/state.json
+```
+
+These are local state files and should not be committed to GitHub.
+
+## CLI Usage
 
 Create a root answer:
 
@@ -46,18 +214,6 @@ Show segments:
 node dist/src/cli/index.js show <nodeId>
 ```
 
-Generate a follow-up prompt for a segment:
-
-```bash
-node dist/src/cli/index.js ask <nodeId> "Why does this need a tree structure?" --segment 3
-```
-
-Attach a model answer as a child node:
-
-```bash
-node dist/src/cli/index.js attach <questionId> "A tree structure is needed because the answer itself can lead to more follow-up questions."
-```
-
 Continue asking questions around the current node:
 
 ```bash
@@ -70,85 +226,10 @@ node dist/src/cli/index.js attach-last "This is the answer to the previous quest
 Export:
 
 ```bash
-node dist/src/cli/index.js export --out answer-tree.md
-```
-
-Export data saved by the OpenCode plugin:
-
-```bash
 node dist/src/cli/index.js export --store opencode --out answer-tree.md
 ```
 
-By default, CLI state is stored at `.answer-tree/state.json` in the current project. OpenCode plugin state is stored at `.answer-tree/opencode-state.json`. The CLI can read plugin data with `--store opencode`, or read any custom state file with `--store <path>`.
-
-## OpenCode Plugin Usage
-
-The plugin entry is:
-
-```text
-src/plugin/opencode.ts
-```
-
-This project already includes a local plugin loader:
-
-```text
-.opencode/plugins/answer-tree.js
-```
-
-Build first:
-
-```bash
-npm run build
-```
-
-Then start OpenCode in this directory. OpenCode will load this project-level plugin.
-
-To start OpenCode with the right-side Answer Tree panel:
-
-```bash
-npm run opencode
-```
-
-By default, this uses the OpenCode host source included in this repository:
-
-```text
-opencode-host/packages/opencode
-```
-
-Normal development does not need a second local repository. For temporary debugging against another OpenCode source copy, override the host directory:
-
-```bash
-OPENCODE_FORK_DIR=/path/to/opencode-host npm run opencode
-```
-
-After building, the plugin can also be used as an npm plugin through this export path:
-
-```text
-opencode-answer-tree/plugin
-```
-
-The plugin provides these tools:
-
-- `answer_tree_create`: save a long answer as a root node.
-- `answer_tree_list`: list the answer tree.
-- `answer_tree_show`: show the segments of a node.
-- `answer_tree_show_full`: show the full content of a node.
-- `answer_tree_current`: show the current node and latest question.
-- `answer_tree_use`: switch the current node.
-- `answer_tree_use_match`: fuzzy-match by title or source question and switch the current node.
-- `answer_tree_rename`: rename a node.
-- `answer_tree_delete`: delete a node; nodes with children are protected by default.
-- `answer_tree_prompt`: record a question and generate a context-aware prompt.
-- `answer_tree_prompt_current`: ask a follow-up question based on the current node.
-- `answer_tree_attach`: attach an answer as a child node.
-- `answer_tree_attach_last`: attach an answer to the latest question.
-- `answer_tree_export`: export Markdown.
-
-The plugin also listens to `message.updated` and automatically saves assistant messages as answer nodes when they exceed the length threshold. This event structure still needs continued verification in real OpenCode sessions.
-
-Nodes are stored in `.answer-tree/opencode-state.json` in the project directory. Tool calls and automatic captures write `opencodeSessionId` to new nodes, and the current node and latest question are tracked separately for each OpenCode session. The right-side sidebar only shows nodes related to the current OpenCode session by default. Nodes created by older versions have no session metadata; they are treated as legacy project nodes and will not be mixed into a new session tree.
-
-This project also provides these OpenCode slash commands:
+## OpenCode Slash Commands
 
 ```text
 /tree-list
@@ -166,24 +247,7 @@ This project also provides these OpenCode slash commands:
 /tree-export
 ```
 
-These commands live in `.opencode/commands/`. Under the hood, they still ask the model to call the corresponding `answer_tree_*` tool.
-
-## Answer Tree Auto Skill
-
-The project-level skill is located at:
-
-```text
-.opencode/skills/answer-tree-auto/SKILL.md
-```
-
-It guides the model to decide when Answer Tree should be updated during normal chat:
-
-- When the user asks a follow-up question around the current active node, prefer `answer_tree_prompt_current`.
-- When the answer is long enough and may lead to future follow-up questions, call `answer_tree_attach_last` to save it as a child node.
-- When the user asks for a new long-form analysis, call `answer_tree_create` after answering to save it as a root node.
-- Greetings, short questions, debugging, UI operations, and similar interactions are not written to the tree.
-
-This is model-behavior automation. It encourages the model to call existing tools. It is not a low-level event listener, so final persistence still depends on whether the model correctly triggers the skill and tools.
+These commands live in `.opencode/commands/` and call the corresponding `answer_tree_*` tools.
 
 ## TUI Viewer
 
@@ -194,7 +258,7 @@ npm run build
 node dist/src/tui/index.js --store opencode
 ```
 
-If Chinese text is displayed as question marks, use ASCII-compatible mode:
+If Chinese text appears as question marks, use ASCII-compatible mode:
 
 ```bash
 node dist/src/tui/index.js --store opencode --ascii
@@ -209,22 +273,46 @@ r                Reload state file
 q                Quit
 ```
 
-## Verification
+## Development Validation
 
 ```bash
 npm run validate
 ```
 
-This command runs the main project tests, CLI/TUI smoke test, and typecheck for the bundled OpenCode host. You can also run the checks separately:
+This command runs:
+
+```text
+Main project tests
+CLI/TUI smoke test
+Bundled OpenCode host typecheck
+```
+
+You can also run checks separately:
 
 ```bash
 npm test
 npm run smoke
 ```
 
-## Product Boundary
+## Project Structure
 
-This version focuses on saving, locating, and reusing long answers and nested follow-up questions. The repository already includes the OpenCode host source, so the current session tree can be viewed on the right side, the active node can be switched, active context can be inspected, and switching nodes can jump to the corresponding answer in the left-side chat history. It has not yet been released as a one-command OpenCode installation for regular users.
+```text
+src/core        Answer Tree data model, segmentation, attachment, export
+src/plugin      OpenCode tools and automatic capture logic
+src/cli         Command-line tool
+src/tui         Standalone TUI viewer
+.opencode       OpenCode commands / skill / plugin loader
+opencode-host   Bundled OpenCode host source with the right sidebar
+docs            Design, validation, and next steps
+```
+
+## Current Boundaries
+
+- This is a single-repository version with a bundled OpenCode host.
+- The global `opencode` command still starts original OpenCode.
+- The Answer Tree version starts with `npm run opencode`.
+- A one-command installable OpenCode distribution for regular users is still future work.
+- Old nodes without `opencodeMessageId` use content and time fallback matching for left-side scrolling.
 
 More documentation:
 
@@ -232,8 +320,6 @@ More documentation:
 - `docs/ARCHITECTURE.md`
 - `docs/COMMANDS.md`
 - `docs/TUI.md`
-- `docs/FORK_PLAN.md`
-- `docs/UPSTREAM_SPIKE.md`
 - `docs/SELF_REVIEW.md`
 - `docs/VALIDATION.md`
 - `docs/NEXT_STEPS.md`

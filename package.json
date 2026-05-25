@@ -18,6 +18,7 @@
     "test": "npm run build && node --test \"dist/test/**/*.js\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke": "npm run build && node dist/src/cli/index.js --help && node dist/src/tui/index.js --help",
+    "setup": "node scripts/setup.mjs",
     "validate": "node scripts/validate.mjs",
     "opencode": "node scripts/opencode-dev.mjs"
   },
