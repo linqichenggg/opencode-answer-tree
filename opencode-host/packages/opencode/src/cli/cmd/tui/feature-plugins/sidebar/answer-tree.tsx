@@ -21,7 +21,22 @@ type AnswerNode = {
 type AnswerTreeState = {
   activeNodeId?: string | null
   nodes?: Record<string, AnswerNode>
-  sessions?: Record<string, { activeNodeId?: string | null; lastQuestionId?: string | null }>
+  sessions?: Record<
+    string,
+    {
+      activeNodeId?: string | null
+      lastQuestionId?: string | null
+      lastCapture?: {
+        status: "saved" | "skipped"
+        reason: string
+        messageId?: string
+        nodeId?: string
+        mode?: "root" | "child"
+        charCount: number
+        updatedAt: string
+      }
+    }
+  >
 }
 
 type LoadedState = {
@@ -233,6 +248,7 @@ function View(props: {
   const state = createMemo(() => loaded()?.state)
   const lines = createMemo(() => treeLines(state(), props.session_id))
   const nodeCount = createMemo(() => lines().length)
+  const lastCapture = createMemo(() => state()?.sessions?.[props.session_id]?.lastCapture)
   const currentSelectedIndex = createMemo(() => selectedIndex(lines(), props.selectedNodeId()))
   const currentSelectedNodeId = createMemo(() => lines()[currentSelectedIndex()]?.id)
   const currentSelectedLine = createMemo(() => lines()[currentSelectedIndex()])
@@ -267,6 +283,14 @@ function View(props: {
           refresh
         </text>
       </box>
+      <Show when={lastCapture()}>
+        {(capture) => (
+          <text fg={capture().status === "saved" ? theme().primary : theme().textMuted} wrapMode="none">
+            Last answer: {capture().status}
+            {capture().nodeId ? ` #${capture().nodeId}` : ""}
+          </text>
+        )}
+      </Show>
       <Show when={open()}>
         <Show
           when={lines().length > 0}

@@ -19,7 +19,12 @@ type ToolContext = {
 
 const STORE_DIR = ".answer-tree";
 const STORE_FILE = "opencode-state.json";
-const MIN_AUTO_CAPTURE_CHARS = 1200;
+const MIN_ROOT_CAPTURE_CHARS = 600;
+const MIN_CHILD_CAPTURE_CHARS = 300;
+const MIN_ROOT_CAPTURE_BULLETS = 3;
+const MIN_CHILD_CAPTURE_BULLETS = 2;
+const MIN_ROOT_CAPTURE_PARAGRAPHS = 3;
+const MIN_CHILD_CAPTURE_PARAGRAPHS = 2;
 
 export const AnswerTreePlugin: Plugin = async (ctx) => {
   const pluginCtx = ctx as PluginContext;
@@ -35,14 +40,56 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
   return {
     event: async ({ event }: { event: unknown }) => {
       const message = extractAssistantMessage(event);
-      if (!message || message.content.length < MIN_AUTO_CAPTURE_CHARS) return;
+      if (!message) return;
 
       await mkdir(join(pluginCtx.directory, STORE_DIR), { recursive: true });
-      await withTree((tree) => {
+      const result = await withTree((tree) => {
         const alreadyCaptured = Object.values(tree.state.nodes).some(
           (node) => node.metadata.opencodeMessageId === message.messageId,
         );
-        if (alreadyCaptured) return;
+        if (alreadyCaptured) {
+          setCaptureStatus(tree, message.sessionID, {
+            status: "skipped",
+            reason: "already captured",
+            messageId: message.messageId,
+            charCount: message.content.length,
+          });
+          return "skipped duplicate";
+        }
+
+        const question = getSessionLastQuestion(tree, message.sessionID);
+        const shouldAttachToQuestion = Boolean(question && !question.answerNodeId);
+        const decision = shouldAutoCapture(message.content, shouldAttachToQuestion ? "child" : "root");
+
+        if (!decision.capture) {
+          setCaptureStatus(tree, message.sessionID, {
+            status: "skipped",
+            reason: decision.reason,
+            messageId: message.messageId,
+            charCount: message.content.length,
+          });
+          return `skipped ${decision.reason}`;
+        }
+
+        if (shouldAttachToQuestion && question) {
+          const node = tree.attachAnswer(question.id, message.content, message.title);
+          node.metadata = {
+            ...node.metadata,
+            opencodeMessageId: message.messageId,
+            ...sessionMetadata(message.sessionID),
+            capturedBy: "message.updated",
+          };
+          setSessionActive(tree, message.sessionID, node.id, question.id);
+          setCaptureStatus(tree, message.sessionID, {
+            status: "saved",
+            reason: decision.reason,
+            messageId: message.messageId,
+            nodeId: node.id,
+            mode: "child",
+            charCount: message.content.length,
+          });
+          return `saved child ${node.id}`;
+        }
 
         const node = tree.createNode({
           title: message.title,
@@ -54,8 +101,17 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
           },
         });
         setSessionActive(tree, message.sessionID, node.id);
+        setCaptureStatus(tree, message.sessionID, {
+          status: "saved",
+          reason: decision.reason,
+          messageId: message.messageId,
+          nodeId: node.id,
+          mode: "root",
+          charCount: message.content.length,
+        });
+        return `saved root ${node.id}`;
       });
-      await log(pluginCtx, "info", `Captured assistant answer ${message.messageId}`);
+      await log(pluginCtx, "info", `Auto capture ${result}: ${message.messageId}`);
     },
 
     tool: {
@@ -348,6 +404,26 @@ function setSessionActive(
   if (questionId) session.lastQuestionId = questionId;
 }
 
+function setCaptureStatus(
+  tree: AnswerTree,
+  sessionID: string | undefined,
+  input: {
+    status: "saved" | "skipped";
+    reason: string;
+    messageId?: string;
+    nodeId?: string;
+    mode?: "root" | "child";
+    charCount: number;
+  },
+): void {
+  const session = getSession(tree, sessionID);
+  if (!session) return;
+  session.lastCapture = {
+    ...input,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function getSessionCurrentNode(tree: AnswerTree, sessionID: string | undefined) {
   const session = getSession(tree, sessionID);
   if (!session) return tree.getCurrentNode();
@@ -487,6 +563,40 @@ function extractText(message: Record<string, unknown>): string {
       .trim();
   }
   return "";
+}
+
+function shouldAutoCapture(
+  content: string,
+  mode: "root" | "child",
+): { capture: true; reason: string } | { capture: false; reason: string } {
+  const stats = contentStats(content);
+  const minChars = mode === "child" ? MIN_CHILD_CAPTURE_CHARS : MIN_ROOT_CAPTURE_CHARS;
+  const minBullets = mode === "child" ? MIN_CHILD_CAPTURE_BULLETS : MIN_ROOT_CAPTURE_BULLETS;
+  const minParagraphs = mode === "child" ? MIN_CHILD_CAPTURE_PARAGRAPHS : MIN_ROOT_CAPTURE_PARAGRAPHS;
+
+  if (stats.charCount >= minChars) return { capture: true, reason: `content has ${stats.charCount} chars` };
+  if (stats.bulletCount >= minBullets) return { capture: true, reason: `content has ${stats.bulletCount} bullets` };
+  if (stats.paragraphCount >= minParagraphs) return { capture: true, reason: `content has ${stats.paragraphCount} paragraphs` };
+
+  return {
+    capture: false,
+    reason: `too short: ${stats.charCount} chars, ${stats.paragraphCount} paragraphs, ${stats.bulletCount} bullets`,
+  };
+}
+
+function contentStats(content: string): { charCount: number; paragraphCount: number; bulletCount: number } {
+  const trimmed = content.trim();
+  const paragraphs = trimmed.split(/\n\s*\n/g).map((part) => part.trim()).filter(Boolean);
+  const bulletCount = trimmed
+    .split("\n")
+    .filter((line) => /^\s*(?:[-*+]|\d+[.)])\s+\S/.test(line))
+    .length;
+
+  return {
+    charCount: Array.from(trimmed).length,
+    paragraphCount: paragraphs.length,
+    bulletCount,
+  };
 }
 
 function inferTitle(content: string): string {

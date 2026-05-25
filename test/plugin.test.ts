@@ -7,6 +7,7 @@ import { AnswerTreePlugin } from "../src/plugin/opencode.js";
 import { loadTree } from "../src/index.js";
 
 type ToolMap = Record<string, { execute: (args: unknown, context?: unknown) => Promise<string> }>;
+type EventPlugin = { event: (input: { event: unknown }) => Promise<void> };
 
 test("OpenCode plugin tools can create and list answer nodes", async () => {
   const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
@@ -105,6 +106,135 @@ test("OpenCode plugin current node is scoped by session", async () => {
 
     assert.match(currentA, /session A/);
     assert.match(currentB, /session B/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode plugin auto-captures structured concise assistant answers", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
+
+  try {
+    const plugin = await AnswerTreePlugin({
+      directory: dir,
+      client: { app: { log: async () => undefined } },
+    } as never);
+
+    await (plugin as never as EventPlugin).event({
+      event: {
+        type: "message.updated",
+        properties: {
+          message: {
+            id: "msg_structured",
+            role: "assistant",
+            sessionID: "ses_auto",
+            content: [
+              "Transformer is a neural network architecture.",
+              "",
+              "Core components:",
+              "- Self-attention compares tokens.",
+              "- Multi-head attention runs several heads.",
+              "- Positional encoding preserves order.",
+              "- Feed-forward layers transform representations.",
+            ].join("\n"),
+          },
+        },
+      },
+    });
+
+    const tree = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+    const nodes = Object.values(tree.state.nodes);
+
+    assert.equal(nodes.length, 1);
+    assert.equal(nodes[0].metadata.opencodeSessionId, "ses_auto");
+    assert.equal(nodes[0].metadata.opencodeMessageId, "msg_structured");
+    assert.equal(tree.state.sessions?.ses_auto?.lastCapture?.status, "saved");
+    assert.equal(tree.state.sessions?.ses_auto?.lastCapture?.mode, "root");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode plugin records skipped status for short assistant answers", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
+
+  try {
+    const plugin = await AnswerTreePlugin({
+      directory: dir,
+      client: { app: { log: async () => undefined } },
+    } as never);
+
+    await (plugin as never as EventPlugin).event({
+      event: {
+        type: "message.updated",
+        properties: {
+          message: {
+            id: "msg_short",
+            role: "assistant",
+            sessionID: "ses_skip",
+            content: "A transformer is a neural network architecture.",
+          },
+        },
+      },
+    });
+
+    const tree = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+
+    assert.equal(Object.values(tree.state.nodes).length, 0);
+    assert.equal(tree.state.sessions?.ses_skip?.lastCapture?.status, "skipped");
+    assert.match(tree.state.sessions?.ses_skip?.lastCapture?.reason ?? "", /too short/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode plugin auto-captures pending follow-up answers as child nodes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
+
+  try {
+    const plugin = await AnswerTreePlugin({
+      directory: dir,
+      client: { app: { log: async () => undefined } },
+    } as never);
+    const tools = (plugin as never as { tool: ToolMap }).tool;
+
+    await tools.answer_tree_create.execute(
+      {
+        content: "Root answer content",
+        title: "Root",
+      },
+      { sessionID: "ses_child" },
+    );
+    await tools.answer_tree_prompt_current.execute(
+      {
+        question: "Explain this part",
+      },
+      { sessionID: "ses_child" },
+    );
+
+    await (plugin as never as EventPlugin).event({
+      event: {
+        type: "message.updated",
+        properties: {
+          message: {
+            id: "msg_child",
+            role: "assistant",
+            sessionID: "ses_child",
+            content: "First paragraph explains the point.\n\nSecond paragraph adds enough detail for reuse.",
+          },
+        },
+      },
+    });
+
+    const tree = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+    const nodes = Object.values(tree.state.nodes);
+    const child = nodes.find((node) => node.parentId);
+
+    assert.equal(nodes.length, 2);
+    assert.ok(child);
+    assert.equal(child.metadata.opencodeMessageId, "msg_child");
+    assert.equal(tree.state.sessions?.ses_child?.lastCapture?.status, "saved");
+    assert.equal(tree.state.sessions?.ses_child?.lastCapture?.mode, "child");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -32,6 +32,16 @@ export type QuestionRecord = {
   createdAt: string;
 };
 
+export type CaptureStatus = {
+  status: "saved" | "skipped";
+  reason: string;
+  messageId?: string;
+  nodeId?: string;
+  mode?: "root" | "child";
+  charCount: number;
+  updatedAt: string;
+};
+
 export type AnswerTreeState = {
   version: 1;
   activeNodeId: string | null;
@@ -44,6 +54,7 @@ export type AnswerTreeState = {
     {
       activeNodeId: string | null;
       lastQuestionId: string | null;
+      lastCapture?: CaptureStatus;
     }
   >;
 };
