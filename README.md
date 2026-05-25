@@ -1,50 +1,51 @@
 # OpenCode Answer Tree
 
-[中文](README.md) | [English](README.en.md)
+[中文](README.zh.md) | [English](README.md)
 
-OpenCode Answer Tree 是一个带右侧回答树的 OpenCode 工作区。它把长回答保存成可追问的树节点，让你在多层追问和多个话题之间切换时，不需要反复翻聊天历史。
+OpenCode Answer Tree is an OpenCode workspace with a right-side answer tree. It turns long LLM answers into follow-up nodes, so you can switch between nested questions and multiple topics without scrolling through the chat timeline.
 
 ![OpenCode Answer Tree sidebar showing multiple topics and nested follow-up nodes](docs/assets/answer-tree-sidebar.png)
 
-## 解决什么问题
+## What It Solves
 
-LLM 一次回答很长时，后续经常会出现这些问题：
+Long LLM answers often create these problems:
 
-- 想追问某一段，但要先往上翻很久。
-- 问了几层之后，已经分不清当前问题基于哪段回答。
-- 同一个 session 里聊多个话题时，历史会混在一起。
-- 需要复盘、导出、分享时，聊天时间线不如树结构清楚。
+- You want to ask about one section, but first you need to scroll back.
+- After several follow-up questions, it becomes unclear which answer the current question depends on.
+- Multiple topics in one session become mixed together.
+- Chat timelines are hard to review, export, or share.
 
-Answer Tree 的目标是把普通聊天变成这种结构：
+Answer Tree turns normal chat into this structure:
 
 ```text
-1 Transformer 架构详解
+1 Transformer architecture
   1.1 Self-Attention QKV
-  1.2 多头注意力机制
-    1.2.1 每个注意力头如何产生
+  1.2 Multi-head attention
+    1.2.1 How each attention head is formed
 
-2 CNN 架构详解
-  2.1 卷积核是什么
+2 CNN architecture
+  2.1 What a convolution kernel is
 ```
 
-每个 OpenCode session 可以有多棵根树，但同一时间只有一个 active context。你可以用右侧 sidebar 在不同话题之间切换焦点，左侧聊天历史会跟着跳到对应回答。
+One OpenCode session can contain multiple root trees, while only one active context is used at a time. You can switch focus in the right sidebar, and the left chat history scrolls to the matching answer.
 
-## 当前能力
+## Current Features
 
-- 自动保存长回答或结构化回答为根节点。
-- 明确追问当前节点时，自动保存为子节点。
-- 同一个 session 支持多个根话题。
-- 右侧 Answer Tree sidebar 显示树、编号、selected 节点和 active context。
-- `j/k` 切换节点时，左侧聊天历史同步滚动到对应回答。
-- `enter` 把 selected 节点设为新的 active context。
-- 节点编号显示为 `1`、`1.1`、`1.1.1`。
-- 支持重命名、删除、查看完整节点、模糊切换节点。
-- 支持 CLI、独立 TUI viewer、Markdown 导出。
-- 一条命令 `npm run validate` 验证主项目和内置 OpenCode host。
+- Automatically saves long or structured answers as root nodes.
+- Automatically saves clear follow-up answers as child nodes.
+- Supports multiple root topics in one session.
+- Right-side Answer Tree sidebar with numbering, selected node, and active context.
+- `j/k` node navigation scrolls the left chat history to the matching answer.
+- Node-level expand/collapse with `space`, plus expand-all and collapse-all shortcuts.
+- `enter` sets the selected node as the new active context.
+- Node numbers use `1`, `1.1`, and `1.1.1`.
+- Rename, delete, show full node, and fuzzy node switching tools.
+- CLI, standalone TUI viewer, and Markdown export.
+- One validation command: `npm run validate`.
 
-## 快速开始
+## Quick Start
 
-环境要求：
+Requirements:
 
 ```text
 Node.js >= 20
@@ -52,7 +53,7 @@ npm
 Bun
 ```
 
-从 GitHub clone 后：
+After cloning from GitHub:
 
 ```bash
 git clone https://github.com/linqichenggg/opencode-answer-tree.git
@@ -61,171 +62,174 @@ npm run setup
 npm run opencode
 ```
 
-`npm run setup` 会做三件事：
+`npm run setup` does three things:
 
 ```text
-安装 Answer Tree 依赖
-安装内置 OpenCode host 依赖
-构建 Answer Tree
+Installs Answer Tree dependencies
+Installs bundled OpenCode host dependencies
+Builds Answer Tree
 ```
 
-启动后请用这个入口：
+Start with this command:
 
 ```bash
 npm run opencode
 ```
 
-直接运行全局 `opencode` 会进入原版 OpenCode。Answer Tree 右侧面板只在 `npm run opencode` 启动的版本里出现。
+Running the global `opencode` command starts the original OpenCode. The Answer Tree sidebar appears only in the version launched with `npm run opencode`.
 
-## 第一次试用流程
+## First Trial Flow
 
-进入 `npm run opencode` 后，按下面流程试：
+After entering `npm run opencode`, try this:
 
-1. 问一个会产生长回答的问题：
-
-```text
-请详细解释 Transformer 架构
-```
-
-2. 回答结束后，右侧应该出现第一棵树：
+1. Ask a question that produces a long answer:
 
 ```text
-1 Transformer 架构详解
+Please explain Transformer architecture in detail
 ```
 
-3. 继续围绕当前回答追问：
+2. After the answer finishes, the first tree should appear on the right:
 
 ```text
-继续解释 self-attention 这一部分
+1 Transformer architecture
 ```
 
-4. 如果回答足够长或结构化，右侧会出现子节点：
+3. Ask a follow-up about the current answer:
 
 ```text
-1 Transformer 架构详解
-  1.1 Self-Attention 解释
+Continue explaining the self-attention part
 ```
 
-5. 换一个新话题：
+4. If the answer is long or structured enough, a child node appears:
 
 ```text
-what is CNN
+1 Transformer architecture
+  1.1 Self-Attention explanation
 ```
 
-6. 新话题会成为新的根节点：
-
-```text
-1 Transformer 架构详解
-2 CNN 解释
-```
-
-## Sidebar 操作
-
-```text
-ctrl+x z  进入 Answer Tree 模式
-j/k       选择上一个 / 下一个节点
-enter     把 selected 节点设为 active context
-r         刷新
-esc/q     回到聊天
-```
-
-界面里的两个状态：
-
-```text
-Selected        当前光标选中的节点
-Active context  后续追问会基于的节点
-```
-
-当你用 `j/k` 移动 selected 节点时，左侧聊天历史会尝试跳到对应回答。按 `enter` 后，selected 节点会变成新的 active context。
-
-## 自动生成规则
-
-新话题会生成根节点，例如：
+5. Switch to a new topic:
 
 ```text
 what is CNN
-解释 CNN 是什么
-介绍一下 RAG
-对比 CNN 和 Transformer
-新话题：解释 diffusion model
 ```
 
-明确追问当前节点会生成子节点，例如：
+6. The new topic becomes another root node:
 
 ```text
-继续解释这个
-展开第 2 点
-这里为什么这样设计
-上面那段是什么意思
-当前节点里的 QKV 是什么
+1 Transformer architecture
+2 CNN explanation
 ```
 
-当前底层保存阈值：
+## Sidebar Controls
 
 ```text
-根节点：超过 600 字符，或 3 个以上 bullet，或 3 段以上
-子节点：超过 300 字符，或 2 个以上 bullet，或 2 段以上
+ctrl+x z  Enter Answer Tree mode
+j/k       Select previous / next node
+space     Expand / collapse selected node
+enter     Set selected node as active context
+a         Expand all nodes
+z         Collapse all nodes
+r         Refresh
+esc/q     Return to chat
 ```
 
-太短的回答会跳过，sidebar 会显示最近一次结果：
+Sidebar states:
+
+```text
+Selected        The node currently highlighted by the cursor
+Active context  The node used as context for future follow-up questions
+```
+
+When you move the selected node with `j/k`, the left chat history tries to scroll to the matching answer. Pressing `enter` makes the selected node the new active context.
+
+## Auto-Capture Rules
+
+New topics become root nodes, for example:
+
+```text
+what is CNN
+explain what CNN is
+introduce RAG
+compare CNN and Transformer
+new topic: explain diffusion models
+```
+
+Clear follow-ups become child nodes, for example:
+
+```text
+continue explaining this
+expand point 2
+why is this designed this way
+what does the above paragraph mean
+what is QKV in the current node
+```
+
+Current save thresholds:
+
+```text
+Root node: more than 600 characters, or 3+ bullets, or 3+ paragraphs
+Child node: more than 300 characters, or 2+ bullets, or 2+ paragraphs
+```
+
+Short answers are skipped, and the sidebar shows the latest result:
 
 ```text
 Last answer: saved #ans_xxxxxxxx
 Last answer: skipped
 ```
 
-## 数据保存位置
+## Data Location
 
-Answer Tree 数据保存在项目目录：
+OpenCode plugin data is stored in the project directory:
 
 ```text
 .answer-tree/opencode-state.json
 ```
 
-CLI 默认数据保存在：
+CLI data is stored at:
 
 ```text
 .answer-tree/state.json
 ```
 
-这些文件是本地状态文件，不需要提交到 GitHub。
+These are local state files and should not be committed to GitHub.
 
-## CLI 用法
+## CLI Usage
 
-创建根回答：
+Create a root answer:
 
 ```bash
-node dist/src/cli/index.js create --file examples/long-answer.md --title "长回答 A"
+node dist/src/cli/index.js create --file examples/long-answer.md --title "Long Answer A"
 ```
 
-查看回答树：
+List the answer tree:
 
 ```bash
 node dist/src/cli/index.js list
 ```
 
-查看 OpenCode 插件保存的回答树：
+List the answer tree saved by the OpenCode plugin:
 
 ```bash
 node dist/src/cli/index.js list --store opencode
 ```
 
-查看分段：
+Show segments:
 
 ```bash
 node dist/src/cli/index.js show <nodeId>
 ```
 
-围绕当前节点连续追问：
+Continue asking questions around the current node:
 
 ```bash
 node dist/src/cli/index.js current --store opencode
 node dist/src/cli/index.js use <nodeId> --store opencode
-node dist/src/cli/index.js ask-current "继续解释这一段" --segment 1 --store opencode
-node dist/src/cli/index.js attach-last "这是上一问的回答" --title "子回答" --store opencode
+node dist/src/cli/index.js ask-current "Explain this part further" --segment 1 --store opencode
+node dist/src/cli/index.js attach-last "This is the answer to the previous question" --title "Child Answer" --store opencode
 ```
 
-导出：
+Export:
 
 ```bash
 node dist/src/cli/index.js export --store opencode --out answer-tree.md
@@ -240,83 +244,83 @@ node dist/src/cli/index.js export --store opencode --out answer-tree.md
 /tree-use-match self attention
 /tree-show ans_xxxxxxxx
 /tree-show-full ans_xxxxxxxx
-/tree-rename ans_xxxxxxxx 新标题
+/tree-rename ans_xxxxxxxx New title
 /tree-delete ans_xxxxxxxx
-/tree-ask ans_xxxxxxxx segment=2 这里为什么要这样设计？
-/tree-ask-current segment=2 这里为什么要这样设计？
-/tree-attach q_xxxxxxxx title=新的子回答 这里是模型回答正文
-/tree-attach-last title=新的子回答 这里是模型回答正文
+/tree-ask ans_xxxxxxxx segment=2 Why is it designed this way?
+/tree-ask-current segment=2 Why is it designed this way?
+/tree-attach q_xxxxxxxx title=New child answer This is the model answer body
+/tree-attach-last title=New child answer This is the model answer body
 /tree-export
 ```
 
-这些命令位于 `.opencode/commands/`，底层会调用对应的 `answer_tree_*` tool。
+These commands live in `.opencode/commands/` and call the corresponding `answer_tree_*` tools.
 
 ## TUI Viewer
 
-查看 OpenCode 插件保存的回答树：
+View the answer tree saved by the OpenCode plugin:
 
 ```bash
 npm run build
 node dist/src/tui/index.js --store opencode
 ```
 
-如果中文显示成问号，使用 ASCII 兼容模式：
+If Chinese text appears as question marks, use ASCII-compatible mode:
 
 ```bash
 node dist/src/tui/index.js --store opencode --ascii
 ```
 
-快捷键：
+Keyboard shortcuts:
 
 ```text
-↑/↓ 或 j/k   选择节点
-e            导出 Markdown
-r            重新读取状态文件
-q            退出
+Up/Down or j/k   Select node
+e                Export Markdown
+r                Reload state file
+q                Quit
 ```
 
-## 开发验证
+## Development Validation
 
 ```bash
 npm run validate
 ```
 
-这条命令会依次运行：
+This command runs:
 
 ```text
-主项目测试
-CLI/TUI smoke 测试
-内置 OpenCode host typecheck
+Main project tests
+CLI/TUI smoke test
+Bundled OpenCode host typecheck
 ```
 
-也可以单独运行：
+You can also run checks separately:
 
 ```bash
 npm test
 npm run smoke
 ```
 
-## 项目结构
+## Project Structure
 
 ```text
-src/core        Answer Tree 数据模型、分段、挂接、导出
-src/plugin      OpenCode tools 和自动捕获逻辑
-src/cli         命令行工具
-src/tui         独立 TUI viewer
+src/core        Answer Tree data model, segmentation, attachment, export
+src/plugin      OpenCode tools and automatic capture logic
+src/cli         Command-line tool
+src/tui         Standalone TUI viewer
 .opencode       OpenCode commands / skill / plugin loader
-opencode-host   内置 OpenCode 宿主源码，包含右侧 sidebar
-docs            设计、验证和后续计划
+opencode-host   Bundled OpenCode host source with the right sidebar
+docs            Design, validation, and next steps
 ```
 
-## 当前边界
+## Current Boundaries
 
-- 这是内置 OpenCode host 的一仓库版本。
-- 普通全局 `opencode` 命令仍然是原版 OpenCode。
-- Answer Tree 版需要通过 `npm run opencode` 启动。
-- 还没有发布成普通用户一键安装的 OpenCode 发行版。
-- 旧节点如果没有 `opencodeMessageId`，左侧跳转会使用内容和时间兜底匹配。
+- This is a single-repository version with a bundled OpenCode host.
+- The global `opencode` command still starts original OpenCode.
+- The Answer Tree version starts with `npm run opencode`.
+- A one-command installable OpenCode distribution for regular users is still future work.
+- Old nodes without `opencodeMessageId` use content and time fallback matching for left-side scrolling.
 
-更多说明见：
+More documentation:
 
 - `docs/PRODUCT_PLAN.md`
 - `docs/ARCHITECTURE.md`

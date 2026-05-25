@@ -53,6 +53,8 @@ type TreeLine = {
   title: string
   path: string[]
   segmentCount: number
+  hasChildren: boolean
+  collapsed: boolean
   active: boolean
   parentQuestion?: string | null
   opencodeMessageId?: string
@@ -143,7 +145,11 @@ function requestSessionScroll(line: TreeLine | undefined, sessionID: string | un
   })
 }
 
-function treeLines(state: AnswerTreeState | undefined, sessionID: string | undefined): TreeLine[] {
+function treeLines(
+  state: AnswerTreeState | undefined,
+  sessionID: string | undefined,
+  collapsedNodeIds: ReadonlySet<string> = new Set(),
+): TreeLine[] {
   if (!state?.nodes) return []
   const nodes = state.nodes
   const activeNodeId = sessionID ? state.sessions?.[sessionID]?.activeNodeId : state.activeNodeId
@@ -189,6 +195,8 @@ function treeLines(state: AnswerTreeState | undefined, sessionID: string | undef
         : branchParts.map((partIsLast) => (partIsLast ? "   " : "│  ")).join("") + (isLast ? "└─ " : "├─ ")
     const numberedTitle = `${number} ${node.title}`
     const path = [...pathTitles, numberedTitle]
+    const childIDs = (node.children ?? []).filter((childID) => included.has(childID))
+    const collapsed = collapsedNodeIds.has(node.id)
     lines.push({
       id: node.id,
       depth,
@@ -197,13 +205,15 @@ function treeLines(state: AnswerTreeState | undefined, sessionID: string | undef
       title: node.title,
       path,
       segmentCount: node.segments?.length ?? 0,
+      hasChildren: childIDs.length > 0,
+      collapsed,
       active: activeNodeId === node.id,
       parentQuestion: node.parentQuestion,
       opencodeMessageId: nodeMessageID(node),
       contentPreview: contentPreview(node),
       createdAt: node.createdAt,
     })
-    const childIDs = (node.children ?? []).filter((childID) => included.has(childID))
+    if (collapsed) return
     childIDs.forEach((childID, index) => {
       const child = nodes[childID]
       if (child) {
@@ -239,6 +249,8 @@ function View(props: {
   session_id: string
   selectedNodeId: () => string | undefined
   setSelectedNodeId: (value: string | undefined) => void
+  collapsedNodeIds: () => ReadonlySet<string>
+  toggleCollapsedNode: (nodeID: string) => void
   refresh: () => number
   bumpRefresh: () => void
   modeActive: () => boolean
@@ -251,7 +263,7 @@ function View(props: {
     return loadState(directory())
   })
   const state = createMemo(() => loaded()?.state)
-  const lines = createMemo(() => treeLines(state(), props.session_id))
+  const lines = createMemo(() => treeLines(state(), props.session_id, props.collapsedNodeIds()))
   const nodeCount = createMemo(() => lines().length)
   const lastCapture = createMemo(() => state()?.sessions?.[props.session_id]?.lastCapture)
   const currentSelectedIndex = createMemo(() => selectedIndex(lines(), props.selectedNodeId()))
@@ -321,7 +333,7 @@ function View(props: {
             }
           >
             <text fg={theme().textMuted} wrapMode="none">
-              j/k move enter use r refresh esc back
+              j/k move space fold enter use r refresh esc back
             </text>
           </Show>
           <For each={lines()}>
@@ -342,6 +354,7 @@ function View(props: {
               >
                 {currentSelectedNodeId() === line.id ? "> " : line.active ? "* " : "  "}
                 {line.prefix}
+                {line.hasChildren ? (line.collapsed ? "▶ " : "▼ ") : "  "}
                 {line.number}{" "}
                 {truncate(line.title, titleMax(line))}
               </text>
@@ -388,13 +401,33 @@ function View(props: {
 
 const tui: TuiPlugin = async (api) => {
   const [selectedNodeId, setSelectedNodeId] = createSignal<string | undefined>()
+  const [collapsedNodeIds, setCollapsedNodeIds] = createSignal<ReadonlySet<string>>(new Set())
   const [refresh, setRefresh] = createSignal(0)
   const [modeActive, setModeActive] = createSignal(false)
   let leaveMode: (() => void) | undefined
   const directory = () => api.state.path.directory || process.cwd()
   let currentSessionID: string | undefined
   const bumpRefresh = () => setRefresh((value) => value + 1)
-  const currentLines = () => treeLines(loadState(directory())?.state, currentSessionID)
+  const currentLines = () => treeLines(loadState(directory())?.state, currentSessionID, collapsedNodeIds())
+  const allLines = () => treeLines(loadState(directory())?.state, currentSessionID)
+  const toggleCollapsedNode = (nodeID: string) => {
+    setCollapsedNodeIds((current) => {
+      const next = new Set(current)
+      if (next.has(nodeID)) next.delete(nodeID)
+      else next.add(nodeID)
+      return next
+    })
+    bumpRefresh()
+  }
+  const collapseAll = () => {
+    const next = new Set(allLines().filter((line) => line.hasChildren).map((line) => line.id))
+    setCollapsedNodeIds(next)
+    bumpRefresh()
+  }
+  const expandAll = () => {
+    setCollapsedNodeIds(new Set<string>())
+    bumpRefresh()
+  }
   const selectRelative = (delta: number) => {
     const lines = currentLines()
     if (!lines.length) return
@@ -423,6 +456,14 @@ const tui: TuiPlugin = async (api) => {
         variant: "error",
       })
     }
+  }
+  const toggleSelected = () => {
+    const lines = currentLines()
+    const nodeID = selectedNodeId() ?? lines[selectedIndex(lines, selectedNodeId())]?.id
+    const line = nodeID ? lines.find((item) => item.id === nodeID) : undefined
+    if (!line?.hasChildren) return
+    toggleCollapsedNode(line.id)
+    requestSessionScroll(line, currentSessionID)
   }
   const enterMode = () => {
     if (modeActive()) return
@@ -499,6 +540,39 @@ const tui: TuiPlugin = async (api) => {
         },
       },
       {
+        name: "answer-tree.toggle.selected",
+        title: "Answer Tree: Toggle selected node",
+        category: "Answer Tree",
+        namespace: "palette",
+        enabled: () => api.route.current.name === "session" && currentLines().some((line) => line.hasChildren),
+        run() {
+          toggleSelected()
+          api.ui.dialog.clear()
+        },
+      },
+      {
+        name: "answer-tree.expand.all",
+        title: "Answer Tree: Expand all nodes",
+        category: "Answer Tree",
+        namespace: "palette",
+        enabled: () => api.route.current.name === "session",
+        run() {
+          expandAll()
+          api.ui.dialog.clear()
+        },
+      },
+      {
+        name: "answer-tree.collapse.all",
+        title: "Answer Tree: Collapse all nodes",
+        category: "Answer Tree",
+        namespace: "palette",
+        enabled: () => api.route.current.name === "session",
+        run() {
+          collapseAll()
+          api.ui.dialog.clear()
+        },
+      },
+      {
         name: "answer-tree.refresh",
         title: "Answer Tree: Refresh",
         category: "Answer Tree",
@@ -518,7 +592,10 @@ const tui: TuiPlugin = async (api) => {
     bindings: [
       { key: "k,up", cmd: "answer-tree.select.previous", desc: "Select previous Answer Tree node" },
       { key: "j,down", cmd: "answer-tree.select.next", desc: "Select next Answer Tree node" },
+      { key: "space", cmd: "answer-tree.toggle.selected", desc: "Toggle selected Answer Tree node" },
       { key: "enter", cmd: "answer-tree.use.selected", desc: "Use selected Answer Tree node" },
+      { key: "a", cmd: "answer-tree.expand.all", desc: "Expand all Answer Tree nodes" },
+      { key: "z", cmd: "answer-tree.collapse.all", desc: "Collapse all Answer Tree nodes" },
       { key: "r", cmd: "answer-tree.refresh", desc: "Refresh Answer Tree" },
       { key: "escape,q", cmd: "answer-tree.blur", desc: "Return to chat" },
     ],
@@ -535,6 +612,8 @@ const tui: TuiPlugin = async (api) => {
             session_id={props.session_id}
             selectedNodeId={selectedNodeId}
             setSelectedNodeId={setSelectedNodeId}
+            collapsedNodeIds={collapsedNodeIds}
+            toggleCollapsedNode={toggleCollapsedNode}
             refresh={refresh}
             bumpRefresh={bumpRefresh}
             modeActive={modeActive}
