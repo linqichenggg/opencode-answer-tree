@@ -5,16 +5,16 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const forkRoot = resolve(
-  process.env.OPENCODE_FORK_DIR ?? resolve(projectRoot, "..", "opencode-answer-tree-fork"),
+const hostRoot = resolve(
+  process.env.OPENCODE_FORK_DIR ?? resolve(projectRoot, "opencode-host"),
   "packages",
   "opencode",
 );
 
-if (!existsSync(forkRoot)) {
-  console.error("OpenCode fork not found.");
-  console.error(`Expected: ${forkRoot}`);
-  console.error("Set OPENCODE_FORK_DIR to the OpenCode fork root if it lives elsewhere.");
+if (!existsSync(hostRoot)) {
+  console.error("OpenCode host not found.");
+  console.error(`Expected: ${hostRoot}`);
+  console.error("Set OPENCODE_FORK_DIR to an OpenCode host root if it lives elsewhere.");
   process.exit(1);
 }
 
@@ -23,9 +23,14 @@ const env = {
   PATH: `${process.env.HOME}/.bun/bin:${process.env.PATH ?? ""}`,
 };
 
+const args = ["run", "--cwd", hostRoot, "dev", projectRoot];
+if (process.env.ANSWER_TREE_OPENCODE_PRINT_LOGS === "1") {
+  args.push("--print-logs", "--log-level", "INFO");
+}
+
 const child = spawn(
   "bun",
-  ["run", "--cwd", forkRoot, "dev", projectRoot, "--print-logs", "--log-level", "INFO"],
+  args,
   {
     stdio: "inherit",
     env,

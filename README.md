@@ -7,7 +7,7 @@ Answer Tree 是一个面向 OpenCode 的长回答追问工作区。它把 LLM �
 - 核心库：回答节点、自动分段、问题记录、子回答挂接、路径追踪、Markdown 导出。
 - CLI：可以不依赖 OpenCode 独立验证完整流程。
 - OpenCode 插件：提供自动捕获长回答的事件 hook 和一组 custom tools。
-- OpenCode fork sidebar：在右侧显示当前会话的 Answer Tree、active context、节点详情和快捷键操作。
+- OpenCode 宿主：`opencode-host/` 内置右侧 Answer Tree sidebar、active context、节点详情和快捷键操作。
 - 测试：覆盖切段、嵌套追问和本地持久化。
 
 ## 安装
@@ -100,22 +100,22 @@ npm run build
 
 然后在当前目录启动 OpenCode 时，OpenCode 会加载这个项目级插件。
 
-如果要启动带右侧 Answer Tree 面板的本地 OpenCode fork：
+如果要启动带右侧 Answer Tree 面板的 OpenCode：
 
 ```bash
 npm run opencode
 ```
 
-默认会寻找相邻目录：
+默认使用本仓库内的 OpenCode 宿主源码：
 
 ```text
-../opencode-answer-tree-fork
+opencode-host/packages/opencode
 ```
 
-如果 fork 放在别处：
+正常开发不需要第二个本地仓库。如果临时调试其他 OpenCode 源码副本，可以覆盖宿主目录：
 
 ```bash
-OPENCODE_FORK_DIR=/path/to/opencode-answer-tree-fork npm run opencode
+OPENCODE_FORK_DIR=/path/to/opencode-host npm run opencode
 ```
 
 构建后也可以通过 npm 插件方式接入 OpenCode，导出路径是：
@@ -143,7 +143,7 @@ opencode-answer-tree/plugin
 
 插件也会监听 `message.updated`，当 assistant 消息长度超过阈值时自动保存为回答节点。这个事件结构需要在真实 OpenCode 会话中继续核验。
 
-节点会继续保存在项目目录的 `.answer-tree/opencode-state.json`。OpenCode 工具调用和自动捕获会给新节点写入 `opencodeSessionId`，并为每个 OpenCode 会话单独记录当前节点和最近问题。fork 版右侧 sidebar 默认只显示当前 OpenCode 会话相关的节点。旧版本生成的节点没有 session metadata，会被视为 legacy project nodes，不会在新会话里混进当前树。
+节点会继续保存在项目目录的 `.answer-tree/opencode-state.json`。OpenCode 工具调用和自动捕获会给新节点写入 `opencodeSessionId`，并为每个 OpenCode 会话单独记录当前节点和最近问题。右侧 sidebar 默认只显示当前 OpenCode 会话相关的节点。旧版本生成的节点没有 session metadata，会被视为 legacy project nodes，不会在新会话里混进当前树。
 
 项目还提供这些 OpenCode slash commands：
 
@@ -215,7 +215,7 @@ npm run smoke
 
 ## 产品边界
 
-这个版本先解决“长回答和套娃追问如何被保存、定位和复用”。当前已经有本地 fork 版 OpenCode sidebar，可以在右侧查看当前会话树、切换 active node、查看 active context。它仍然是本地 fork 集成，还没有发布成普通用户一键安装的 OpenCode 版本。
+这个版本先解决“长回答和套娃追问如何被保存、定位和复用”。当前仓库已经内置 OpenCode 宿主源码，可以在右侧查看当前会话树、切换 active node、查看 active context，并在切换节点时跳转到左侧对应回答历史。它还没有发布成普通用户一键安装的 OpenCode 版本。
 
 更多说明见：
 
