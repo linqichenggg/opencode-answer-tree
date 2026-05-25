@@ -4,6 +4,8 @@
 
 OpenCode Answer Tree 是一个带右侧回答树的 OpenCode 工作区。它把长回答保存成可追问的树节点，让你在多层追问和多个话题之间切换时，不需要反复翻聊天历史。
 
+![OpenCode Answer Tree sidebar showing multiple topics and nested follow-up nodes](docs/assets/answer-tree-sidebar.png)
+
 ## 解决什么问题
 
 LLM 一次回答很长时，后续经常会出现这些问题：

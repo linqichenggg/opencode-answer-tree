@@ -4,6 +4,8 @@
 
 OpenCode Answer Tree is an OpenCode workspace with a right-side answer tree. It turns long LLM answers into follow-up nodes, so you can switch between nested questions and multiple topics without scrolling through the chat timeline.
 
+![OpenCode Answer Tree sidebar showing multiple topics and nested follow-up nodes](docs/assets/answer-tree-sidebar.png)
+
 ## What It Solves
 
 Long LLM answers often create these problems:
