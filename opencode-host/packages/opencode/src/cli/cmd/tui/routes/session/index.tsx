@@ -193,6 +193,7 @@ type AnswerTreeScrollRequest = {
   messageID?: string
   title: string
   contentPreview?: string
+  createdAt?: string
 }
 
 type AnswerTreeScrollGlobal = typeof globalThis & {
@@ -407,6 +408,21 @@ export function Session() {
         return normalizeScrollMatch(textForMessage(message.id)).includes(title)
       })
       if (matched) return matched.id
+    }
+
+    const nodeTime = input.createdAt ? Date.parse(input.createdAt) : Number.NaN
+    if (Number.isFinite(nodeTime)) {
+      const assistantMessages = messages()
+        .filter((message) => message.role === "assistant")
+        .map((message) => ({
+          message,
+          time: message.time.completed ?? message.time.created,
+        }))
+        .filter((item) => Number.isFinite(item.time))
+        .sort((a, b) => b.time - a.time)
+
+      const preceding = assistantMessages.find((item) => item.time <= nodeTime + 2_000)
+      if (preceding) return preceding.message.id
     }
   }
   const scrollToAnswerTreeMessage = (input: AnswerTreeScrollRequest) => {

@@ -15,6 +15,7 @@ type AnswerNode = {
   parentQuestion?: string | null
   parentId?: string | null
   children?: string[]
+  createdAt?: string
   metadata?: Record<string, unknown>
 }
 
@@ -56,6 +57,7 @@ type TreeLine = {
   parentQuestion?: string | null
   opencodeMessageId?: string
   contentPreview?: string
+  createdAt?: string
 }
 
 function truncate(value: string, max: number): string {
@@ -128,6 +130,7 @@ function requestSessionScroll(line: TreeLine | undefined, sessionID: string | un
       messageID?: string
       title: string
       contentPreview?: string
+      createdAt?: string
     }) => void
   }).__answerTreeScrollToMessage
   target?.({
@@ -136,6 +139,7 @@ function requestSessionScroll(line: TreeLine | undefined, sessionID: string | un
     messageID: line.opencodeMessageId,
     title: line.title,
     contentPreview: line.contentPreview,
+    createdAt: line.createdAt,
   })
 }
 
@@ -197,6 +201,7 @@ function treeLines(state: AnswerTreeState | undefined, sessionID: string | undef
       parentQuestion: node.parentQuestion,
       opencodeMessageId: nodeMessageID(node),
       contentPreview: contentPreview(node),
+      createdAt: node.createdAt,
     })
     const childIDs = (node.children ?? []).filter((childID) => included.has(childID))
     childIDs.forEach((childID, index) => {
