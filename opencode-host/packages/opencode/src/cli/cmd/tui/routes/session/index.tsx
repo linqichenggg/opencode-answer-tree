@@ -372,17 +372,33 @@ export function Session() {
       .join("\n\n")
   }
   const normalizeScrollMatch = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase()
+  const scrollMatchNeedles = (input: AnswerTreeScrollRequest) => {
+    const values = [input.title, input.contentPreview ?? ""]
+    const rawPieces = values.flatMap((value) =>
+      value
+        .split(/[\n。！？.!?]+/g)
+        .map((part) => part.trim())
+        .filter(Boolean),
+    )
+    const normalized = rawPieces
+      .map(normalizeScrollMatch)
+      .filter((part) => part.length >= 12)
+      .sort((a, b) => b.length - a.length)
+
+    return Array.from(new Set(normalized)).slice(0, 12)
+  }
   const findAnswerTreeMessageID = (input: AnswerTreeScrollRequest) => {
     if (input.messageID && messages().some((message) => message.id === input.messageID)) return input.messageID
 
-    const preview = normalizeScrollMatch(input.contentPreview ?? "")
-    if (preview.length >= 40) {
-      const matched = messages().find((message) => {
-        if (message.role !== "assistant") return false
-        return normalizeScrollMatch(textForMessage(message.id)).includes(preview)
-      })
-      if (matched) return matched.id
-    }
+    const needles = scrollMatchNeedles(input)
+    const matchedByContent = messages().find((message) => {
+      if (message.role !== "assistant") return false
+      const haystack = normalizeScrollMatch(textForMessage(message.id))
+      if (!haystack) return false
+      if (needles.some((needle) => needle.length >= 40 && haystack.includes(needle))) return true
+      return needles.filter((needle) => needle.length >= 12 && haystack.includes(needle)).length >= 2
+    })
+    if (matchedByContent) return matchedByContent.id
 
     const title = normalizeScrollMatch(input.title)
     if (title.length >= 8) {

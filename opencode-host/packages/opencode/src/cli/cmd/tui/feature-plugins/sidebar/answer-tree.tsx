@@ -116,7 +116,7 @@ function nodeMessageID(node: AnswerNode): string | undefined {
 function contentPreview(node: AnswerNode): string | undefined {
   const value = node.content?.trim()
   if (!value) return
-  return value.slice(0, 240)
+  return value.slice(0, 1200)
 }
 
 function requestSessionScroll(line: TreeLine | undefined, sessionID: string | undefined) {
