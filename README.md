@@ -1,5 +1,7 @@
 # OpenCode Answer Tree
 
+[中文](README.md) | [English](README.en.md)
+
 Answer Tree 是一个面向 OpenCode 的长回答追问工作区。它把 LLM 的长回答保存成可分段、可追问、可继续嵌套的树状结构，避免在聊天时间线里反复往上翻。
 
 ## 当前完成内容
