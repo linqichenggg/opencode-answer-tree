@@ -1,0 +1,35 @@
+{
+  "name": "opencode-answer-tree",
+  "version": "0.1.0",
+  "description": "Answer tree workspace for nested follow-up questions in OpenCode and local CLI workflows.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "bin": {
+    "answer-tree": "./dist/src/cli/index.js",
+    "answer-tree-tui": "./dist/src/tui/index.js"
+  },
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./plugin": "./dist/src/plugin/opencode.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test \"dist/test/**/*.js\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke": "npm run build && node dist/src/cli/index.js --help && node dist/src/tui/index.js --help",
+    "opencode": "node scripts/opencode-dev.mjs"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.15.7",
+    "blessed": "^0.1.81"
+  },
+  "devDependencies": {
+    "@types/blessed": "^0.1.27",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

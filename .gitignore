@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.answer-tree/
+.opencode/node_modules/
+.opencode/package.json
+.opencode/package-lock.json
+.opencode/bun.lock
+.DS_Store
+*.log
