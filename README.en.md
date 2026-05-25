@@ -10,6 +10,7 @@ Answer Tree is a long-answer follow-up workspace for OpenCode. It saves long LLM
 - CLI: verifies the full workflow without depending on OpenCode.
 - OpenCode plugin: provides event hooks for automatically capturing long answers and a set of custom tools.
 - OpenCode host: `opencode-host/` includes the right-side Answer Tree sidebar, active context, node details, and keyboard operations.
+- Node numbering: tree views, TUI, and Markdown export show hierarchical numbers such as `1`, `1.1`, and `1.1.1`.
 - Tests: cover segmentation, nested follow-up questions, and local persistence.
 
 ## Installation
@@ -209,6 +210,12 @@ q                Quit
 ```
 
 ## Verification
+
+```bash
+npm run validate
+```
+
+This command runs the main project tests, CLI/TUI smoke test, and typecheck for the bundled OpenCode host. You can also run the checks separately:
 
 ```bash
 npm test

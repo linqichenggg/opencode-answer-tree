@@ -69,7 +69,7 @@ test("OpenCode plugin tools support current node and last question flow", async 
     assert.match(attached, new RegExp(`Question: ${questionId}`));
 
     const list = await tools.answer_tree_list.execute({});
-    assert.match(list, /\* ans_[a-z0-9]+ child \(1 segments\)/);
+    assert.match(list, /\* 1\.1 ans_[a-z0-9]+ child \(1 segments\)/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

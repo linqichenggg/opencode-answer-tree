@@ -1,8 +1,9 @@
-import type { AnswerNode, AnswerTree, QuestionRecord } from "../index.js";
+import { buildNodeNumberMap, type AnswerNode, type AnswerTree, type QuestionRecord } from "../index.js";
 
 export type TreeLine = {
   nodeId: string;
   depth: number;
+  number: string;
   label: string;
 };
 
@@ -12,8 +13,9 @@ export type ViewOptions = {
 
 export function buildTreeLines(tree: AnswerTree, options: ViewOptions = {}): TreeLine[] {
   const lines: TreeLine[] = [];
+  const nodeNumbers = buildNodeNumberMap(tree.state);
   for (const root of tree.listRoots()) {
-    appendNode(tree, root, 0, lines, options);
+    appendNode(tree, root, 0, lines, options, nodeNumbers);
   }
   return lines;
 }
@@ -22,7 +24,10 @@ export function renderNodeDetails(tree: AnswerTree, node: AnswerNode | null, opt
   if (!node) return "No answer node selected.";
 
   const parts: string[] = [];
+  const nodeNumbers = buildNodeNumberMap(tree.state);
   parts.push(formatTitle(node, options));
+  const nodeNumber = nodeNumbers.get(node.id);
+  if (nodeNumber) parts.push(`Number: ${nodeNumber}`);
   parts.push(`ID: ${node.id}`);
   parts.push(`Segments: ${node.segments.length}`);
   if (node.parentId) parts.push(`Parent: ${node.parentId}`);
@@ -30,7 +35,8 @@ export function renderNodeDetails(tree: AnswerTree, node: AnswerNode | null, opt
   parts.push("");
   parts.push("Path:");
   for (const pathNode of tree.pathTo(node.id)) {
-    parts.push(`- ${pathNode.id} ${formatTitle(pathNode, options)}`);
+    const pathNumber = nodeNumbers.get(pathNode.id);
+    parts.push(`- ${pathNumber ? `${pathNumber} ` : ""}${pathNode.id} ${formatTitle(pathNode, options)}`);
   }
   parts.push("");
   parts.push("Segments:");
@@ -57,18 +63,27 @@ export function questionsForNode(tree: AnswerTree, nodeId: string): QuestionReco
     .filter((question): question is QuestionRecord => Boolean(question && question.nodeId === nodeId));
 }
 
-function appendNode(tree: AnswerTree, node: AnswerNode, depth: number, lines: TreeLine[], options: ViewOptions): void {
+function appendNode(
+  tree: AnswerTree,
+  node: AnswerNode,
+  depth: number,
+  lines: TreeLine[],
+  options: ViewOptions,
+  nodeNumbers: Map<string, string>,
+): void {
   const active = tree.state.activeNodeId === node.id ? "* " : "";
   const indent = "  ".repeat(depth);
+  const number = nodeNumbers.get(node.id) ?? "";
   lines.push({
     nodeId: node.id,
     depth,
-    label: `${indent}${active}${formatTitle(node, options)} (${node.id})`,
+    number,
+    label: `${indent}${active}${number ? `${number} ` : ""}${formatTitle(node, options)} (${node.id})`,
   });
 
   for (const childId of node.children) {
     const child = tree.getNode(childId);
-    if (child) appendNode(tree, child, depth + 1, lines, options);
+    if (child) appendNode(tree, child, depth + 1, lines, options, nodeNumbers);
   }
 }
 

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AnswerTree } from "../src/index.js";
+import { AnswerTree, buildNodeNumberMap } from "../src/index.js";
 
 test("AnswerTree supports nested answer nodes", () => {
   const tree = new AnswerTree();
@@ -25,7 +25,21 @@ test("AnswerTree supports nested answer nodes", () => {
   assert.equal(tree.pathTo(child.id).map((node) => node.id).join(">"), `${root.id}>${child.id}`);
   assert.match(promptA.prompt, /引用片段 2/);
   assert.match(promptX.prompt, /当前路径/);
-  assert.match(tree.renderTree(), new RegExp(`${root.id}.*\\n  \\* ${child.id}`));
+  assert.match(tree.renderTree(), new RegExp(`1 ${root.id}.*\\n  \\* 1\\.1 ${child.id}`));
+});
+
+test("AnswerTree builds display numbers from tree position", () => {
+  const tree = new AnswerTree();
+  const rootA = tree.createNode({ title: "A", content: "root a" });
+  const questionA = tree.recordQuestion({ nodeId: rootA.id, question: "why a?" });
+  const childA = tree.attachAnswer(questionA.questionId, "child a", "A child");
+  const rootB = tree.createNode({ title: "B", content: "root b" });
+
+  const numbers = buildNodeNumberMap(tree.state);
+
+  assert.equal(numbers.get(rootA.id), "1");
+  assert.equal(numbers.get(childA.id), "1.1");
+  assert.equal(numbers.get(rootB.id), "2");
 });
 
 test("AnswerTree tracks current node and last question", () => {
@@ -46,7 +60,7 @@ test("AnswerTree tracks current node and last question", () => {
 
   tree.setCurrentNode(root.id);
   assert.equal(tree.requireCurrentNode().id, root.id);
-  assert.match(tree.renderTree(), new RegExp(`\\* ${root.id}`));
+  assert.match(tree.renderTree(), new RegExp(`\\* 1 ${root.id}`));
 });
 
 test("AnswerTree exports markdown with questions", () => {
@@ -57,5 +71,7 @@ test("AnswerTree exports markdown with questions", () => {
   const markdown = tree.exportMarkdown();
 
   assert.match(markdown, /# Answer Tree Export/);
+  assert.match(markdown, /## 1\. A/);
+  assert.match(markdown, /Number: `1`/);
   assert.match(markdown, /why\?/);
 });

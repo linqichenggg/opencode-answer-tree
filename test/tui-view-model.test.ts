@@ -14,7 +14,9 @@ test("TUI view model renders nested tree lines with active marker", () => {
   assert.equal(lines.length, 2);
   assert.equal(lines[0].nodeId, root.id);
   assert.equal(lines[1].nodeId, child.id);
-  assert.match(lines[1].label, /\* Child/);
+  assert.equal(lines[0].number, "1");
+  assert.equal(lines[1].number, "1.1");
+  assert.match(lines[1].label, /\* 1\.1 Child/);
 });
 
 test("TUI view model renders node details with path, segments, and questions", () => {
@@ -25,6 +27,7 @@ test("TUI view model renders node details with path, segments, and questions", (
   const details = renderNodeDetails(tree, root);
 
   assert.match(details, /ID: ans_/);
+  assert.match(details, /Number: 1/);
   assert.match(details, /Path:/);
   assert.match(details, /\[1\] segment one/);
   assert.match(details, /Explain segment one/);
@@ -38,7 +41,7 @@ test("TUI view model ascii mode hides non-ASCII text", () => {
   const lines = buildTreeLines(tree, { ascii: true });
   const details = renderNodeDetails(tree, root, { ascii: true });
 
-  assert.match(lines[0].label, new RegExp(`\\* A \\(${root.id}\\)`));
+  assert.match(lines[0].label, new RegExp(`\\* 1 A \\(${root.id}\\)`));
   assert.doesNotMatch(lines[0].label, /[^\x00-\x7F]/);
   assert.match(details, /non-ASCII text hidden/);
   assert.doesNotMatch(details, /[^\x00-\x7F]/);

@@ -10,6 +10,7 @@ Answer Tree 是一个面向 OpenCode 的长回答追问工作区。它把 LLM �
 - CLI：可以不依赖 OpenCode 独立验证完整流程。
 - OpenCode 插件：提供自动捕获长回答的事件 hook 和一组 custom tools。
 - OpenCode 宿主：`opencode-host/` 内置右侧 Answer Tree sidebar、active context、节点详情和快捷键操作。
+- 节点编号：树、TUI 和 Markdown 导出中显示 `1`、`1.1`、`1.1.1` 这类层级编号。
 - 测试：覆盖切段、嵌套追问和本地持久化。
 
 ## 安装
@@ -209,6 +210,12 @@ q            退出
 ```
 
 ## 验证
+
+```bash
+npm run validate
+```
+
+这条命令会依次运行主项目测试、CLI/TUI smoke 测试和内置 OpenCode 宿主的 typecheck。也可以单独运行：
 
 ```bash
 npm test

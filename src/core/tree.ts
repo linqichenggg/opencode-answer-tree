@@ -21,6 +21,24 @@ export function createEmptyState(): AnswerTreeState {
   };
 }
 
+export function buildNodeNumberMap(state: AnswerTreeState): Map<string, string> {
+  const numbers = new Map<string, string>();
+  const roots = Object.values(state.nodes)
+    .filter((node) => node.parentId === null)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+  function visit(node: AnswerNode, number: string): void {
+    numbers.set(node.id, number);
+    node.children.forEach((childId, index) => {
+      const child = state.nodes[childId];
+      if (child) visit(child, `${number}.${index + 1}`);
+    });
+  }
+
+  roots.forEach((root, index) => visit(root, String(index + 1)));
+  return numbers;
+}
+
 export class AnswerTree {
   constructor(public state: AnswerTreeState = createEmptyState()) {
     this.state.lastQuestionId ??= null;
@@ -78,6 +96,7 @@ export class AnswerTree {
         segment,
         question: question.question,
         path: this.pathTo(node.id),
+        nodeNumbers: buildNodeNumberMap(this.state),
         includeAncestorPath: input.includeAncestorPath ?? true,
         includeRootSummary: input.includeRootSummary ?? false,
       }),
@@ -171,16 +190,18 @@ export class AnswerTree {
 
   renderTree(): string {
     const lines: string[] = [];
+    const nodeNumbers = buildNodeNumberMap(this.state);
     for (const root of this.listRoots()) {
-      renderNode(this.state, root, lines, "");
+      renderNode(this.state, root, lines, "", nodeNumbers);
     }
     return lines.join("\n");
   }
 
   exportMarkdown(): string {
     const sections: string[] = ["# Answer Tree Export"];
+    const nodeNumbers = buildNodeNumberMap(this.state);
     for (const root of this.listRoots()) {
-      sections.push(renderMarkdownNode(this.state, root, 2));
+      sections.push(renderMarkdownNode(this.state, root, 2, nodeNumbers));
     }
     return sections.join("\n\n");
   }
@@ -197,6 +218,7 @@ function buildPrompt(input: {
   segment: Segment | null;
   question: string;
   path: AnswerNode[];
+  nodeNumbers: Map<string, string>;
   includeAncestorPath: boolean;
   includeRootSummary: boolean;
 }): string {
@@ -207,7 +229,8 @@ function buildPrompt(input: {
   if (input.includeAncestorPath && input.path.length > 1) {
     lines.push("## 当前路径");
     for (const node of input.path) {
-      lines.push(`- ${node.id}: ${node.title}`);
+      const number = input.nodeNumbers.get(node.id);
+      lines.push(`- ${number ? `${number} ` : ""}${node.id}: ${node.title}`);
       if (node.parentQuestion) lines.push(`  - 来源问题: ${node.parentQuestion}`);
     }
     lines.push("");
@@ -234,19 +257,34 @@ function buildPrompt(input: {
   return lines.join("\n");
 }
 
-function renderNode(state: AnswerTreeState, node: AnswerNode, lines: string[], prefix: string): void {
+function renderNode(
+  state: AnswerTreeState,
+  node: AnswerNode,
+  lines: string[],
+  prefix: string,
+  nodeNumbers: Map<string, string>,
+): void {
   const currentMarker = state.activeNodeId === node.id ? "* " : "";
-  lines.push(`${prefix}${currentMarker}${node.id} ${node.title} (${node.segments.length} segments)`);
+  const number = nodeNumbers.get(node.id);
+  const numberPrefix = number ? `${number} ` : "";
+  lines.push(`${prefix}${currentMarker}${numberPrefix}${node.id} ${node.title} (${node.segments.length} segments)`);
   const childPrefix = `${prefix}  `;
   for (const childId of node.children) {
     const child = state.nodes[childId];
-    if (child) renderNode(state, child, lines, childPrefix);
+    if (child) renderNode(state, child, lines, childPrefix, nodeNumbers);
   }
 }
 
-function renderMarkdownNode(state: AnswerTreeState, node: AnswerNode, level: number): string {
+function renderMarkdownNode(
+  state: AnswerTreeState,
+  node: AnswerNode,
+  level: number,
+  nodeNumbers: Map<string, string>,
+): string {
   const heading = "#".repeat(level);
-  const parts: string[] = [`${heading} ${node.title}`, `Node: \`${node.id}\``];
+  const number = nodeNumbers.get(node.id);
+  const parts: string[] = [`${heading} ${number ? `${number}. ` : ""}${node.title}`, `Node: \`${node.id}\``];
+  if (number) parts.push(`Number: \`${number}\``);
   if (node.parentQuestion) parts.push(`Parent question: ${node.parentQuestion}`);
   parts.push("");
   parts.push(node.content);
@@ -262,7 +300,7 @@ function renderMarkdownNode(state: AnswerTreeState, node: AnswerNode, level: num
 
   for (const childId of node.children) {
     const child = state.nodes[childId];
-    if (child) parts.push(renderMarkdownNode(state, child, level + 1));
+    if (child) parts.push(renderMarkdownNode(state, child, level + 1, nodeNumbers));
   }
   return parts.join("\n");
 }

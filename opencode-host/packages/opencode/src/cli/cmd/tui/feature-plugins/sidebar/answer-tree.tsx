@@ -32,6 +32,7 @@ type LoadedState = {
 type TreeLine = {
   id: string
   depth: number
+  number: string
   prefix: string
   title: string
   path: string[]
@@ -155,15 +156,24 @@ function treeLines(state: AnswerTreeState | undefined, sessionID: string | undef
   })
   const lines: TreeLine[] = []
 
-  function visit(node: AnswerNode, depth: number, branchParts: boolean[], isLast: boolean, pathTitles: string[]) {
+  function visit(
+    node: AnswerNode,
+    depth: number,
+    branchParts: boolean[],
+    isLast: boolean,
+    pathTitles: string[],
+    number: string,
+  ) {
     const prefix =
       depth === 0
         ? ""
         : branchParts.map((partIsLast) => (partIsLast ? "   " : "│  ")).join("") + (isLast ? "└─ " : "├─ ")
-    const path = [...pathTitles, node.title]
+    const numberedTitle = `${number} ${node.title}`
+    const path = [...pathTitles, numberedTitle]
     lines.push({
       id: node.id,
       depth,
+      number,
       prefix,
       title: node.title,
       path,
@@ -176,11 +186,13 @@ function treeLines(state: AnswerTreeState | undefined, sessionID: string | undef
     const childIDs = (node.children ?? []).filter((childID) => included.has(childID))
     childIDs.forEach((childID, index) => {
       const child = nodes[childID]
-      if (child) visit(child, depth + 1, [...branchParts, isLast], index === childIDs.length - 1, path)
+      if (child) {
+        visit(child, depth + 1, [...branchParts, isLast], index === childIDs.length - 1, path, `${number}.${index + 1}`)
+      }
     })
   }
 
-  roots.forEach((root, index) => visit(root, 0, [], index === roots.length - 1, []))
+  roots.forEach((root, index) => visit(root, 0, [], index === roots.length - 1, [], String(index + 1)))
   return lines
 }
 
@@ -225,7 +237,7 @@ function View(props: {
   const currentSelectedNodeId = createMemo(() => lines()[currentSelectedIndex()]?.id)
   const currentSelectedLine = createMemo(() => lines()[currentSelectedIndex()])
   const activeLine = createMemo(() => lines().find((line) => line.active))
-  const titleMax = (line: TreeLine) => Math.max(14, 31 - Array.from(line.prefix).length)
+  const titleMax = (line: TreeLine) => Math.max(10, 31 - Array.from(`${line.prefix}${line.number} `).length)
   let lastSyncedActiveNodeId: string | undefined
 
   createEffect(() => {
@@ -301,6 +313,7 @@ function View(props: {
               >
                 {currentSelectedNodeId() === line.id ? "> " : line.active ? "* " : "  "}
                 {line.prefix}
+                {line.number}{" "}
                 {truncate(line.title, titleMax(line))}
               </text>
             )}
@@ -324,7 +337,7 @@ function View(props: {
                   Selected
                 </text>
                 <text fg={theme().text} wrapMode="none">
-                  {truncate(line().title, 34)}
+                  {line().number} {truncate(line().title, 34)}
                 </text>
                 <text fg={theme().textMuted} wrapMode="none">
                   id: {line().id}
@@ -371,7 +384,7 @@ const tui: TuiPlugin = async (api) => {
       requestSessionScroll(line, currentSessionID)
       api.ui.toast({
         title: "Answer Tree",
-        message: `Active node: ${nodeID}`,
+        message: `Active node: ${line?.number ? `${line.number} ` : ""}${nodeID}`,
       })
       bumpRefresh()
     } else {
