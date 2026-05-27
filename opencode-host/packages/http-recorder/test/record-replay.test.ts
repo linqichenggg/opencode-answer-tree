@@ -54,6 +54,51 @@ const failureText = (exit: Exit.Exit<unknown, unknown>) => {
   return Cause.prettyErrors(exit.cause).join("\n")
 }
 
+const fakeApiKey = () => `sk-${"1".repeat(24)}`
+
+const fakeGoogleApiKey = () =>
+  String.fromCharCode(
+    65,
+    73,
+    122,
+    97,
+    83,
+    121,
+    68,
+    72,
+    105,
+    98,
+    105,
+    66,
+    82,
+    118,
+    74,
+    90,
+    76,
+    115,
+    70,
+    110,
+    80,
+    89,
+    80,
+    111,
+    105,
+    84,
+    119,
+    120,
+    89,
+    52,
+    122,
+    116,
+    81,
+    53,
+    53,
+    121,
+    113,
+    67,
+    69,
+  )
+
 describe("http-recorder", () => {
   test("redacts sensitive URL query parameters", () => {
     expect(
@@ -124,9 +169,9 @@ describe("http-recorder", () => {
             transport: "http",
             request: {
               method: "POST",
-              url: "https://example.test/path?key=sk-123456789012345678901234",
+              url: `https://example.test/path?key=${fakeApiKey()}`,
               headers: {},
-              body: JSON.stringify({ nested: ["AIzaSyDHibiBRvJZLs", "FnPYPoiTwxY4ztQ55yqCE"].join("") }),
+              body: JSON.stringify({ nested: fakeGoogleApiKey() }),
             },
             response: {
               status: 200,
@@ -147,7 +192,7 @@ describe("http-recorder", () => {
     expect(
       HttpRecorder.secretFindings({
         version: 1,
-        metadata: { token: "sk-123456789012345678901234" },
+        metadata: { token: fakeApiKey() },
         interactions: [],
       }),
     ).toEqual([{ path: "metadata.token", reason: "API key" }])
@@ -311,7 +356,7 @@ describe("http-recorder", () => {
     await run(
       Effect.gen(function* () {
         const exit = yield* Effect.exit(
-          post("https://example.test/echo?api_key=secret-value", { step: 3, token: "sk-123456789012345678901234" }),
+          post("https://example.test/echo?api_key=secret-value", { step: 3, token: fakeApiKey() }),
         )
         const message = failureText(exit)
         expect(message).toContain("url:")
@@ -319,7 +364,7 @@ describe("http-recorder", () => {
         expect(message).toContain("body:")
         expect(message).toContain("$.step expected 1, received 3")
         expect(message).toContain('$.token expected undefined, received "[REDACTED]"')
-        expect(message).not.toContain("sk-123456789012345678901234")
+        expect(message).not.toContain(fakeApiKey())
       }),
     )
   })
