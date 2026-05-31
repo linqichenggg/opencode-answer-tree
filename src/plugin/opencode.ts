@@ -323,6 +323,34 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
         },
       }),
 
+      answer_tree_prompt_auto: tool({
+        description:
+          "Record a follow-up question after choosing the best parent node. Defaults to the current active node, but routes to another node when the question clearly names a different node, title, source question, or content topic.",
+        args: {
+          question: tool.schema.string(),
+          segmentIndex: tool.schema.number().optional(),
+          includeRootSummary: tool.schema.boolean().optional(),
+        },
+        async execute(args, toolCtx?: ToolContext) {
+          return withTree((tree) => {
+            const routed = selectQuestionParentNode(tree, toolCtx?.sessionID, args.question);
+            const context = tree.recordQuestion({
+              nodeId: routed.node.id,
+              question: args.question,
+              segmentIndex: args.segmentIndex,
+              includeRootSummary: args.includeRootSummary ?? false,
+            });
+            setSessionActive(tree, toolCtx?.sessionID, context.node.id, context.questionId);
+            return [
+              `Parent: ${routed.node.id} ${routed.node.title}`,
+              `Route: ${routed.reason}`,
+              "",
+              formatPromptResponse(tree, context.questionId, context.prompt, context.node.id, args.question),
+            ].join("\n");
+          });
+        },
+      }),
+
       answer_tree_attach: tool({
         description: "Attach an assistant answer to a recorded question, making it a child node.",
         args: {
@@ -602,6 +630,42 @@ function childAttachmentDecision(
   };
 }
 
+function selectQuestionParentNode(tree: AnswerTree, sessionID: string | undefined, question: string) {
+  const current = getSessionCurrentNode(tree, sessionID);
+  const explicitNodeId = extractNodeId(question);
+  if (explicitNodeId) {
+    const node = tree.getNode(explicitNodeId);
+    if (node) return { node, reason: `explicit node id ${explicitNodeId}` };
+  }
+
+  const normalizedQuestion = normalizeForMatch(question);
+  const matches = findMatchingNodes(tree, question, sessionID);
+  const best = matches[0];
+
+  if (!current) {
+    if (best) return { node: best, reason: "best matched node; no active node" };
+    throw new Error("No current answer node for this OpenCode session. Save or select a node first.");
+  }
+
+  if (!best || best.id === current.id) return { node: current, reason: "active node default" };
+
+  const bestScore = matchScore(best, normalizedQuestion);
+  const currentScore = matchScore(current, normalizedQuestion);
+  const clearlyNamesOtherNode = bestScore >= 50 && bestScore >= currentScore + 20;
+  if (clearlyNamesOtherNode) {
+    return {
+      node: best,
+      reason: `matched another node (${bestScore} > active ${currentScore})`,
+    };
+  }
+
+  return { node: current, reason: "active node default" };
+}
+
+function extractNodeId(input: string): string | null {
+  return input.match(/\bans_[a-z0-9]+\b/u)?.[0] ?? null;
+}
+
 function findMatchingNodes(tree: AnswerTree, query: string, sessionID: string | undefined) {
   const normalizedQuery = normalizeForMatch(query);
   if (!normalizedQuery) return [];
@@ -665,22 +729,31 @@ function collectSubtreeIds(tree: AnswerTree, nodeId: string): string[] {
   return [node.id, ...node.children.flatMap((childId) => collectSubtreeIds(tree, childId))];
 }
 
-function matchScore(node: { id: string; title: string; parentQuestion: string | null }, normalizedQuery: string): number {
+function matchScore(
+  node: { id: string; title: string; parentQuestion: string | null; content?: string },
+  normalizedQuery: string,
+): number {
   const title = normalizeForMatch(node.title);
   const parentQuestion = normalizeForMatch(node.parentQuestion ?? "");
+  const content = normalizeForMatch(node.content ?? "");
   const id = normalizeForMatch(node.id);
 
   if (id === normalizedQuery) return 100;
+  if (normalizedQuery.includes(id)) return 95;
   if (title === normalizedQuery) return 90;
   if (title.includes(normalizedQuery)) return 70;
+  if (normalizedQuery.includes(title) && title.length >= 6) return 65;
   if (parentQuestion.includes(normalizedQuery)) return 45;
+  if (content.includes(normalizedQuery)) return 35;
 
   const tokens = normalizedQuery.split(" ").filter((token) => token.length > 0);
   if (tokens.length === 0) return 0;
 
-  const titleHits = tokens.filter((token) => title.includes(token)).length;
-  const questionHits = tokens.filter((token) => parentQuestion.includes(token)).length;
-  return titleHits * 12 + questionHits * 6;
+  const usefulTokens = tokens.filter((token) => Array.from(token).length >= 2);
+  const titleHits = usefulTokens.filter((token) => title.includes(token)).length;
+  const questionHits = usefulTokens.filter((token) => parentQuestion.includes(token)).length;
+  const contentHits = usefulTokens.filter((token) => content.includes(token)).length;
+  return titleHits * 14 + questionHits * 7 + contentHits * 2;
 }
 
 function normalizeForMatch(value: string): string {

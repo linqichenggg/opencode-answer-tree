@@ -21,6 +21,13 @@ session
 
 There is only one active node/context at a time. The user can switch focus between topics in the sidebar; follow-up questions attach to the active node only when the user clearly refers to that context.
 
+Parent routing rule:
+
+- For each new user question, first decide which existing node should be the parent context.
+- The active node is the default parent.
+- Route to another node when the user clearly names another node id, title, section, topic, or source question shown in the sidebar.
+- If another node is only weakly related, keep the active node.
+
 Depth rule:
 
 - The tree should have at most 3 levels: `1 -> 1.1 -> 1.1.1`.
@@ -58,7 +65,7 @@ When unsure whether the user changed topic, prefer a new root node. Use the acti
 
 Use when the user asks a clear follow-up about the currently selected/active answer.
 
-1. Call `answer_tree_prompt_current` with the user's question.
+1. Call `answer_tree_prompt_auto` with the user's question.
 2. Read the returned context path and use it to answer.
 3. If your answer is substantial enough to be useful as a future node, call `answer_tree_attach_last` with:
    - `content`: the same assistant answer content you will give the user
@@ -69,10 +76,11 @@ Skip step 3 when the answer is short, procedural, or not worth future follow-up.
 
 Hard rule:
 
-- Never call `answer_tree_attach_last` before `answer_tree_prompt_current` or `answer_tree_prompt` in the same follow-up flow.
+- Never call `answer_tree_attach_last` before `answer_tree_prompt_auto`, `answer_tree_prompt_current`, or `answer_tree_prompt` in the same follow-up flow.
+- Prefer `answer_tree_prompt_auto` for natural follow-up questions, because it chooses the parent node before recording the question.
 - Never put the user's question, feedback, or request text into `answer_tree_attach_last.content`.
-- Phrases like "看不懂", "解释一下", "展开第三步", "这里再详细讲" are user questions. First record them with `answer_tree_prompt_current`, then answer, then attach the assistant answer if substantial.
-- For very specific detail questions, call `answer_tree_prompt_current` when context is needed, answer normally, and do not call `answer_tree_attach_last`.
+- Phrases like "看不懂", "解释一下", "展开第三步", "这里再详细讲" are user questions. First record them with `answer_tree_prompt_auto`, then answer, then attach the assistant answer if substantial.
+- For very specific detail questions, call `answer_tree_prompt_auto` when context is needed, answer normally, and do not call `answer_tree_attach_last`.
 - If the active node is already third-level, do not call `answer_tree_attach_last`.
 
 ## Workflow B: New Standalone Long Answer
@@ -128,6 +136,7 @@ Do not attach for answers that are only "yes/no", one command, one sentence, a s
 Prefer current-node tools:
 
 ```text
+answer_tree_prompt_auto
 answer_tree_prompt_current
 answer_tree_attach_last
 ```

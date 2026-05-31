@@ -462,6 +462,96 @@ test("OpenCode plugin records latest user message and uses it for follow-up rout
   }
 });
 
+test("OpenCode plugin auto-routes follow-up questions to a named non-active parent node", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
+
+  try {
+    const plugin = await AnswerTreePlugin({
+      directory: dir,
+      client: { app: { log: async () => undefined } },
+    } as never);
+    const tools = (plugin as never as { tool: ToolMap }).tool;
+
+    await tools.answer_tree_create.execute(
+      {
+        content: "Alpha content explains DACE representation learning.",
+        title: "DACE Representation Learning",
+      },
+      { sessionID: "ses_route_parent" },
+    );
+    const alphaTree = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+    const alpha = Object.values(alphaTree.state.nodes).find((node) => node.title === "DACE Representation Learning");
+    assert.ok(alpha);
+
+    await tools.answer_tree_create.execute(
+      {
+        content: "Beta content explains multi-head attention.",
+        title: "Multi-Head Attention",
+      },
+      { sessionID: "ses_route_parent" },
+    );
+
+    const prompt = await tools.answer_tree_prompt_auto.execute(
+      {
+        question: "针对 DACE Representation Learning 继续展开方法部分",
+      },
+      { sessionID: "ses_route_parent" },
+    );
+    const tree = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+    const lastQuestion = tree.getLastQuestion();
+
+    assert.match(prompt, new RegExp(`Parent: ${alpha.id}`));
+    assert.equal(lastQuestion?.nodeId, alpha.id);
+    assert.equal(tree.state.sessions?.ses_route_parent?.activeNodeId, alpha.id);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode plugin auto-routes ambiguous follow-up questions to the active node", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
+
+  try {
+    const plugin = await AnswerTreePlugin({
+      directory: dir,
+      client: { app: { log: async () => undefined } },
+    } as never);
+    const tools = (plugin as never as { tool: ToolMap }).tool;
+
+    await tools.answer_tree_create.execute(
+      {
+        content: "Alpha content",
+        title: "DACE Representation Learning",
+      },
+      { sessionID: "ses_route_active" },
+    );
+    await tools.answer_tree_create.execute(
+      {
+        content: "Beta content",
+        title: "Multi-Head Attention",
+      },
+      { sessionID: "ses_route_active" },
+    );
+    const before = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+    const active = before.state.sessions?.ses_route_active?.activeNodeId;
+    assert.ok(active);
+
+    const prompt = await tools.answer_tree_prompt_auto.execute(
+      {
+        question: "继续展开这个节点",
+      },
+      { sessionID: "ses_route_active" },
+    );
+    const tree = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+    const lastQuestion = tree.getLastQuestion();
+
+    assert.match(prompt, new RegExp(`Parent: ${active}`));
+    assert.equal(lastQuestion?.nodeId, active);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("OpenCode plugin can switch current node by title match", async () => {
   const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
 
