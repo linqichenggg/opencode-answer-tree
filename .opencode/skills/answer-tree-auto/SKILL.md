@@ -21,6 +21,12 @@ session
 
 There is only one active node/context at a time. The user can switch focus between topics in the sidebar; follow-up questions attach to the active node only when the user clearly refers to that context.
 
+Depth rule:
+
+- The tree should have at most 3 levels: `1 -> 1.1 -> 1.1.1`.
+- Never create or attach a child node under a third-level node.
+- For fourth-level or deeper follow-ups, answer normally inside the current context.
+
 Prefer quiet automation. Do not ask the user to manually call `answer_tree_*` tools unless a required tool is unavailable or the target node is ambiguous.
 
 ## Decision Rules
@@ -38,6 +44,7 @@ Do not track when:
 - The user explicitly says not to save or not to update Answer Tree.
 - The answer will be short and unlikely to become a future branch.
 - You cannot infer which existing node the question belongs to and there is no active node.
+- The user asks a very narrow detail question, such as a single definition, one equation, one number, one concrete output, one example, or "why is this value X".
 
 New-topic rule:
 
@@ -54,11 +61,19 @@ Use when the user asks a clear follow-up about the currently selected/active ans
 1. Call `answer_tree_prompt_current` with the user's question.
 2. Read the returned context path and use it to answer.
 3. If your answer is substantial enough to be useful as a future node, call `answer_tree_attach_last` with:
-   - `answer`: the same answer content you will give the user
+   - `content`: the same assistant answer content you will give the user
    - `title`: a short, specific title, preferably 6-14 words
 4. Final response should include the answer. Add one short sentence that it was saved to Answer Tree only when useful.
 
 Skip step 3 when the answer is short, procedural, or not worth future follow-up.
+
+Hard rule:
+
+- Never call `answer_tree_attach_last` before `answer_tree_prompt_current` or `answer_tree_prompt` in the same follow-up flow.
+- Never put the user's question, feedback, or request text into `answer_tree_attach_last.content`.
+- Phrases like "看不懂", "解释一下", "展开第三步", "这里再详细讲" are user questions. First record them with `answer_tree_prompt_current`, then answer, then attach the assistant answer if substantial.
+- For very specific detail questions, call `answer_tree_prompt_current` when context is needed, answer normally, and do not call `answer_tree_attach_last`.
+- If the active node is already third-level, do not call `answer_tree_attach_last`.
 
 ## Workflow B: New Standalone Long Answer
 
@@ -95,6 +110,8 @@ Use when the user mentions a node id or asks to base a question on a visible nod
 4. Answer using the returned path context.
 5. If substantial, call `answer_tree_attach_last` with the answer and title.
 
+Again, `answer_tree_attach_last` is only for the assistant's answer after a question has already been recorded. It should not be the first Answer Tree tool in a follow-up.
+
 ## What Counts As Substantial
 
 Attach the assistant answer as a child node when it has one of these shapes:
@@ -104,7 +121,7 @@ Attach the assistant answer as a child node when it has one of these shapes:
 - introduces a new plan, design, explanation, comparison, or decision
 - likely to be asked about again
 
-Do not attach for answers that are only "yes/no", one command, one sentence, or a small correction.
+Do not attach for answers that are only "yes/no", one command, one sentence, a small correction, a single example, a single formula, a concrete numeric explanation, or a local clarification.
 
 ## Tool Preference
 

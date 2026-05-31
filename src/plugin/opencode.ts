@@ -25,6 +25,7 @@ const MIN_ROOT_CAPTURE_BULLETS = 3;
 const MIN_CHILD_CAPTURE_BULLETS = 2;
 const MIN_ROOT_CAPTURE_PARAGRAPHS = 3;
 const MIN_CHILD_CAPTURE_PARAGRAPHS = 2;
+const MAX_NODE_DEPTH = 3;
 
 export const AnswerTreePlugin: Plugin = async (ctx) => {
   const pluginCtx = ctx as PluginContext;
@@ -71,7 +72,11 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
         const shouldAttachToQuestion = Boolean(
           question && !question.answerNodeId && isFollowUpQuestion(latestUserText),
         );
-        const decision = shouldAutoCapture(message.content, shouldAttachToQuestion ? "child" : "root");
+        const attachment = question && shouldAttachToQuestion
+          ? childAttachmentDecision(tree, question.nodeId, question.question)
+          : { attach: false as const, reason: "not a pending child answer", message: "" };
+        const captureMode = shouldAttachToQuestion && attachment.attach ? "child" : "root";
+        const decision = shouldAutoCapture(message.content, captureMode);
 
         if (!decision.capture) {
           setCaptureStatus(tree, message.sessionID, {
@@ -83,7 +88,17 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
           return `skipped ${decision.reason}`;
         }
 
-        if (shouldAttachToQuestion && question) {
+        if (shouldAttachToQuestion && question && !attachment.attach) {
+          setCaptureStatus(tree, message.sessionID, {
+            status: "skipped",
+            reason: attachment.reason,
+            messageId: message.messageId,
+            charCount: message.content.length,
+          });
+          return `skipped ${attachment.reason}`;
+        }
+
+        if (shouldAttachToQuestion && question && attachment.attach) {
           const node = tree.attachAnswer(question.id, message.content, message.title);
           node.metadata = {
             ...node.metadata,
@@ -281,7 +296,7 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
               includeRootSummary: args.includeRootSummary ?? false,
             });
             setSessionActive(tree, toolCtx?.sessionID, context.node.id, context.questionId);
-            return `Question ${context.questionId}\n\n${context.prompt}`;
+            return formatPromptResponse(tree, context.questionId, context.prompt, context.node.id, args.question);
           });
         },
       }),
@@ -303,7 +318,7 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
               includeRootSummary: args.includeRootSummary ?? false,
             });
             setSessionActive(tree, toolCtx?.sessionID, context.node.id, context.questionId);
-            return `Question ${context.questionId}\n\n${context.prompt}`;
+            return formatPromptResponse(tree, context.questionId, context.prompt, context.node.id, args.question);
           });
         },
       }),
@@ -317,6 +332,10 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
         },
         async execute(args, toolCtx?: ToolContext) {
           return withTree((tree) => {
+            const question = tree.state.questions[args.questionId];
+            if (!question) throw new Error(`Question not found: ${args.questionId}`);
+            const attachment = childAttachmentDecision(tree, question.nodeId, question.question);
+            if (!attachment.attach) return attachment.message;
             const node = tree.attachAnswer(args.questionId, args.content, args.title);
             node.metadata = {
               ...node.metadata,
@@ -330,7 +349,8 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
       }),
 
       answer_tree_attach_last: tool({
-        description: "Attach an assistant answer to the last recorded question.",
+        description:
+          "Attach the assistant's answer to the last recorded Answer Tree question. Use only after answer_tree_prompt_current or answer_tree_prompt has recorded the user's question; do not use this to save the user's question itself.",
         args: {
           content: tool.schema.string(),
           title: tool.schema.string().optional(),
@@ -338,6 +358,11 @@ export const AnswerTreePlugin: Plugin = async (ctx) => {
         async execute(args, toolCtx?: ToolContext) {
           return withTree((tree) => {
             const question = requireSessionLastQuestion(tree, toolCtx?.sessionID);
+            const attachment = childAttachmentDecision(tree, question.nodeId, question.question);
+            if (!attachment.attach) {
+              setSessionActive(tree, toolCtx?.sessionID, question.nodeId, question.id);
+              return attachment.message;
+            }
             const node = tree.attachAnswer(question.id, args.content, args.title);
             node.metadata = {
               ...node.metadata,
@@ -518,9 +543,63 @@ function getSessionLastQuestion(tree: AnswerTree, sessionID: string | undefined)
 
 function requireSessionLastQuestion(tree: AnswerTree, sessionID: string | undefined) {
   const question = getSessionLastQuestion(tree, sessionID);
-  if (!question) throw new Error("No last question for this OpenCode session. Ask a question first.");
+  if (!question) {
+    throw new Error(
+      "No last question for this OpenCode session. Call answer_tree_prompt_current or answer_tree_prompt with the user's question before answer_tree_attach_last.",
+    );
+  }
   tree.state.lastQuestionId = question.id;
   return question;
+}
+
+function formatPromptResponse(
+  tree: AnswerTree,
+  questionId: string,
+  prompt: string,
+  nodeId: string,
+  question: string,
+): string {
+  const attachment = childAttachmentDecision(tree, nodeId, question);
+  if (attachment.attach) return `Question ${questionId}\n\n${prompt}`;
+
+  return [
+    `Question ${questionId}`,
+    "",
+    "Answer Tree note:",
+    attachment.message,
+    "",
+    prompt,
+  ].join("\n");
+}
+
+function childAttachmentDecision(
+  tree: AnswerTree,
+  parentNodeId: string,
+  question: string,
+): { attach: true; reason: string; message: string } | { attach: false; reason: string; message: string } {
+  const parent = tree.requireNode(parentNodeId);
+  const parentDepth = tree.pathTo(parent.id).length;
+  if (parentDepth >= MAX_NODE_DEPTH) {
+    return {
+      attach: false,
+      reason: `max depth reached (${parentDepth}/${MAX_NODE_DEPTH})`,
+      message: `Skipped Answer Tree child node: max depth is ${MAX_NODE_DEPTH} levels. Answer this as detail inside the current node context instead.`,
+    };
+  }
+
+  if (isDetailQuestion(question)) {
+    return {
+      attach: false,
+      reason: "question is too specific for a reusable child node",
+      message: "Skipped Answer Tree child node: this is a narrow detail question. Answer it normally without creating another tree level.",
+    };
+  }
+
+  return {
+    attach: true,
+    reason: "eligible child node",
+    message: "Eligible Answer Tree child node.",
+  };
 }
 
 function findMatchingNodes(tree: AnswerTree, query: string, sessionID: string | undefined) {
@@ -707,6 +786,53 @@ function isFollowUpQuestion(input: string): boolean {
     /对比/u,
   ];
   if (generalNewTopicPatterns.some((pattern) => pattern.test(normalized))) return false;
+
+  return false;
+}
+
+function isDetailQuestion(input: string): boolean {
+  const normalized = normalizeForMatch(input);
+  if (!normalized) return false;
+
+  const chars = Array.from(normalized).length;
+  const hasLocalReference = [
+    /这个/u,
+    /这里/u,
+    /其中/u,
+    /这一步/u,
+    /第\s*\d+/u,
+    /\bthis\b/u,
+    /\bthat\b/u,
+    /\bline\b/u,
+    /\bstep\s*\d+\b/u,
+  ].some((pattern) => pattern.test(normalized));
+  const hasDetailIntent = [
+    /具体/u,
+    /细节/u,
+    /例子/u,
+    /举例/u,
+    /数据/u,
+    /数值/u,
+    /公式/u,
+    /定义/u,
+    /是什么意思/u,
+    /什么意思/u,
+    /为什么/u,
+    /为何/u,
+    /怎么算/u,
+    /怎么得到/u,
+    /输出/u,
+    /结果/u,
+    /\bdefinition\b/u,
+    /\bexample\b/u,
+    /\bwhy\b/u,
+    /\bhow exactly\b/u,
+  ].some((pattern) => pattern.test(normalized));
+  const hasConcreteToken = /\d+(?:\.\d+)?|[a-z]{1,4}\s*[=/→\-]|qkv|q\/k|q-k|loss|损失|预测|输出/u.test(normalized);
+
+  if (hasDetailIntent && hasConcreteToken) return true;
+  if (hasLocalReference && hasDetailIntent && chars <= 120) return true;
+  if (hasConcreteToken && chars <= 80) return true;
 
   return false;
 }

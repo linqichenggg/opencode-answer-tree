@@ -240,6 +240,113 @@ test("OpenCode plugin auto-captures pending follow-up answers as child nodes", a
   }
 });
 
+test("OpenCode plugin skips child nodes for narrow detail questions", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
+
+  try {
+    const plugin = await AnswerTreePlugin({
+      directory: dir,
+      client: { app: { log: async () => undefined } },
+    } as never);
+    const tools = (plugin as never as { tool: ToolMap }).tool;
+
+    await tools.answer_tree_create.execute(
+      {
+        content: "Root answer content",
+        title: "Root",
+      },
+      { sessionID: "ses_detail" },
+    );
+    await tools.answer_tree_prompt_current.execute(
+      {
+        question: "为什么无偏提取器不会输出 0.2 0.2？",
+      },
+      { sessionID: "ses_detail" },
+    );
+
+    const attached = await tools.answer_tree_attach_last.execute(
+      {
+        content: "因为这里讨论的是一个非常具体的数值例子，直接解释即可。\n\n不需要再生成一个可复用节点。",
+        title: "Detail answer",
+      },
+      { sessionID: "ses_detail" },
+    );
+    const tree = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+
+    assert.match(attached, /Skipped Answer Tree child node/);
+    assert.equal(Object.values(tree.state.nodes).length, 1);
+    assert.equal(tree.state.sessions?.ses_detail?.activeNodeId, Object.values(tree.state.nodes)[0].id);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode plugin limits child node depth to three levels", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
+
+  try {
+    const plugin = await AnswerTreePlugin({
+      directory: dir,
+      client: { app: { log: async () => undefined } },
+    } as never);
+    const tools = (plugin as never as { tool: ToolMap }).tool;
+
+    await tools.answer_tree_create.execute(
+      {
+        content: "Root answer content",
+        title: "Root",
+      },
+      { sessionID: "ses_depth" },
+    );
+    await tools.answer_tree_prompt_current.execute(
+      {
+        question: "继续展开这个主题",
+      },
+      { sessionID: "ses_depth" },
+    );
+    await tools.answer_tree_attach_last.execute(
+      {
+        content: "Level two answer with enough reusable detail.\n\nIt can still have one more child.",
+        title: "Level two",
+      },
+      { sessionID: "ses_depth" },
+    );
+    await tools.answer_tree_prompt_current.execute(
+      {
+        question: "继续展开这一层的核心方法",
+      },
+      { sessionID: "ses_depth" },
+    );
+    await tools.answer_tree_attach_last.execute(
+      {
+        content: "Level three answer with enough reusable detail.\n\nThis is the deepest reusable level.",
+        title: "Level three",
+      },
+      { sessionID: "ses_depth" },
+    );
+    await tools.answer_tree_prompt_current.execute(
+      {
+        question: "继续展开这一层的实现细节",
+      },
+      { sessionID: "ses_depth" },
+    );
+    const skipped = await tools.answer_tree_attach_last.execute(
+      {
+        content: "This would be level four.\n\nIt should remain normal chat detail.",
+        title: "Level four",
+      },
+      { sessionID: "ses_depth" },
+    );
+
+    const tree = await loadTree(join(dir, ".answer-tree", "opencode-state.json"));
+
+    assert.match(skipped, /max depth is 3 levels/);
+    assert.equal(Object.values(tree.state.nodes).length, 3);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("OpenCode plugin treats clear new topics as new root nodes inside one session", async () => {
   const dir = await mkdtemp(join(tmpdir(), "opencode-answer-tree-plugin-"));
 
