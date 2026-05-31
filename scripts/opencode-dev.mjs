@@ -86,12 +86,28 @@ function shutdown(signal) {
   setTimeout(() => killChild("SIGKILL"), 800).unref();
 }
 
+function forwardResize() {
+  if (!child.pid || shuttingDown) return;
+  try {
+    process.kill(-child.pid, "SIGWINCH");
+  } catch {
+    try {
+      process.kill(child.pid, "SIGWINCH");
+    } catch {
+      // The child process may have exited between resize events.
+    }
+  }
+}
+
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.once(signal, () => {
     shutdown(signal);
     setTimeout(() => process.exit(signalExitCodes[signal]), 1500).unref();
   });
 }
+
+process.on("SIGWINCH", forwardResize);
+if (process.stdout.isTTY) process.stdout.on("resize", forwardResize);
 
 process.once("exit", () => {
   if (!shuttingDown) killChild();
