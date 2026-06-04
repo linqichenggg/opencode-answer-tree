@@ -2,7 +2,7 @@
 
 [中文](README.zh.md) | [English](README.md)
 
-OpenCode Answer Tree is an OpenCode workspace with a right-side answer tree. It turns long LLM answers into follow-up nodes, so you can switch between nested questions and multiple topics without scrolling through the chat timeline.
+OpenCode Answer Tree is a version 1.0 OpenCode workspace with a right-side answer tree. It turns long LLM answers into follow-up nodes, so you can switch between nested questions and multiple topics without scrolling through the chat timeline.
 
 ![OpenCode Answer Tree sidebar showing multiple topics and nested follow-up nodes](docs/assets/answer-tree-sidebar.png)
 
@@ -33,6 +33,8 @@ One OpenCode session can contain multiple root trees, while only one active cont
 
 - Automatically saves long or structured answers as root nodes.
 - Automatically saves clear follow-up answers as child nodes.
+- Routes follow-up questions to the most likely parent node, with the active context as the default.
+- Skips very narrow detail questions and limits tree depth to three levels.
 - Supports multiple root topics in one session.
 - Right-side Answer Tree sidebar with numbering, selected node, and active context.
 - `j/k` node navigation scrolls the left chat history to the matching answer.
@@ -161,8 +163,17 @@ continue explaining this
 expand point 2
 why is this designed this way
 what does the above paragraph mean
-what is QKV in the current node
 ```
+
+Very narrow detail questions are kept in the chat but skipped as tree nodes, for example:
+
+```text
+what is QKV
+what does this symbol mean
+why is the value 0.2
+```
+
+Child nodes are limited to three visible levels: `1`, `1.1`, and `1.1.1`. Deeper detail chains remain normal chat turns instead of becoming `1.1.1.1`.
 
 Current save thresholds:
 

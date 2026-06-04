@@ -1,105 +1,74 @@
-# 下一步实施路线
+# 后续路线
 
-## 当前 V1 已完成
+OpenCode Answer Tree 1.0 已经完成本地可展示版本。后续工作重点从“证明这个想法能跑”转向“让更多用户更容易安装、使用和迁移”。
 
-- 树状数据结构。
-- 长回答切段。
-- 片段追问 prompt。
-- 子回答挂接。
-- CLI 工作流。
-- OpenCode 插件入口和 custom tools。
-- 自动化测试和手工验收。
-- 独立 TUI Viewer，可以查看 OpenCode 插件保存的回答树。
-- 项目级 `answer-tree-auto` skill，可以指导模型在普通聊天里自动调用 Answer Tree tools。
+## 1. 发布体验
 
-## 下一步优先级
+目标：降低使用门槛。
 
-### 1. 真实 OpenCode 会话验证
+可做事项：
 
-目标：确认 `message.updated` 事件里的 message shape 是否和当前解析器完全一致。
+- 提供一条安装命令或发布 npm package。
+- 增加更清楚的首次启动检查，提示 Node、npm、Bun 是否缺失。
+- 把 `npm run opencode` 包装成更短的命令。
+- 提供 demo 数据导入命令，方便展示树结构。
 
-动作：
+## 2. 更稳定的自动判断
 
-```bash
-npm run build
-opencode
-```
+目标：减少模型误建节点或漏建节点。
 
-然后在 OpenCode 中产生一条长回答，检查：
+可做事项：
 
-```text
-.answer-tree/opencode-state.json
-```
+- 继续收集真实使用中的“应该建节点 / 不应该建节点”样例。
+- 给 parent routing 增加更可解释的日志。
+- 给 detail-question skip 增加更多中文和英文规则。
+- 在 sidebar 中显示最近一次跳过原因。
 
-如果没有捕获，需要根据真实 event payload 调整 `extractAssistantMessage()`。
+## 3. Sidebar 体验
 
-### 2. 插件命令体验
+目标：让右侧树在长会话里更容易读。
 
-目标：让用户不用记 tool 名。
+可做事项：
 
-已完成第一版项目级 slash commands：
+- 节点搜索。
+- 只看当前 active path。
+- 节点标签或颜色。
+- 更明显的 active node 标记。
+- selected node 的完整内容预览。
 
-```text
-/tree-list
-/tree-show
-/tree-ask
-/tree-attach
-/tree-export
-```
+## 4. 导出和复盘
 
-当前边界：OpenCode command 是 prompt 模板，仍然由模型调用 tool。后续如果要完全确定性执行，需要 fork OpenCode TUI 或等待插件 API 支持直接注册 command handler。
+目标：让 Answer Tree 能作为学习和研究记录。
 
-### 2.5 自动 skill 体验验证
+可做事项：
 
-目标：减少用户手动要求模型调用 `answer_tree_*` tool 的次数。
+- 导出当前 active path。
+- 导出某个节点及其子树。
+- 生成学习笔记格式。
+- 生成 Obsidian 友好的 Markdown。
 
-已新增：
+## 5. 迁移到其他 LLM 工具
+
+目标：把 Answer Tree 从 OpenCode 扩展到更多聊天工具。
+
+优先顺序：
 
 ```text
-.opencode/skills/answer-tree-auto/SKILL.md
+OpenCode
+  ↓
+Claude Code / Codex CLI 类终端工具
+  ↓
+ChatGPT / Claude / Gemini / DeepSeek / MiniMax 等网页或桌面工具
 ```
 
-验证方式：
-
-1. 启动 OpenCode。
-2. 让模型生成一段新的长回答。
-3. 对其中一部分自然语言追问，例如“针对用户体验部分继续展开”。
-4. 检查模型是否自动调用 `answer_tree_prompt_current` 和 `answer_tree_attach_last`。
-5. 检查 `.answer-tree/opencode-state.json` 是否新增子节点。
-
-当前边界：skill 只能约束模型行为，不是确定性的事件处理器。若模型没有触发 tool，需要继续加强 skill 描述，或在 fork 里做事件级自动挂接。
-
-### 3. Fork OpenCode TUI
-
-触发条件：
-
-- 插件已能稳定保存和生成 prompt。
-- 用户确认这个工作流确实减少翻页成本。
-- 独立 TUI Viewer 的信息结构已经验证清楚。
-
-要改的产品界面：
+迁移时应保留核心库：
 
 ```text
-左侧：Answer Tree
-中间：当前回答和编号片段
-右侧：当前节点问题线程
-底部：输入框
+src/core
 ```
 
-核心库保持不变，只新增 UI adapter。
-
-### 4. 发布形态
-
-先发布 npm 插件：
+每个平台只新增 adapter：
 
 ```text
-opencode-answer-tree
+平台消息事件 -> Answer Tree core -> 平台侧边栏或独立 viewer
 ```
-
-再考虑 fork 版：
-
-```text
-opencode-answer-tree-edition
-```
-
-插件版适合验证，fork 版适合做完整体验。

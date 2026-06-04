@@ -1,5 +1,7 @@
 # OpenCode Fork Integration Plan
 
+状态：历史计划。这里记录的是 2026-05-23 的 fork 探索过程。1.0 版已经把 fork spike 整合进当前仓库的 `opencode-host/`，普通使用者只需要 clone 当前 `opencode-answer-tree` 仓库并运行 `npm run opencode`。
+
 ## 目标
 
 把当前 Answer Tree 能力从“独立插件 + CLI + TUI Viewer”推进到 OpenCode 内部体验：
@@ -104,7 +106,7 @@ Fork 第一版成功标准：
 6. npm/bun 测试或至少 typecheck 通过。
 ```
 
-## 当前下一步
+## 历史执行记录
 
 1. 已克隆上游 OpenCode 到 `/Users/lqcmacmini/code/opencode-upstream`。
 2. 已创建本地 fork 工作副本 `/Users/lqcmacmini/code/opencode-answer-tree-fork`。
@@ -112,16 +114,15 @@ Fork 第一版成功标准：
 4. 已确认 TUI 技术栈是 `@opentui/solid`。
 5. 已发现 `sidebar_content` 插槽，可以先做 sidebar 插件，降低 fork 风险。
 
-下一步：
-
 1. 已安装 Bun 并完成 fork 依赖安装。
 2. 已在 `/Users/lqcmacmini/code/opencode-answer-tree-fork/packages/opencode` 跑通上游 typecheck。
 3. 已修正 fork spike 中的类型问题。
 4. fork 版 OpenCode 能启动，并确认 `internal:sidebar-answer-tree` 被加载。
 
-后续重点：
+这些工作后来被合并到当前仓库：
 
-1. 在真实 session 中人工确认 `ctrl+x z` 进入 Answer Tree 模式，以及 `j/k/enter/r/esc` 的单键交互。
-2. 给 fork sidebar panel 增加 ASCII fallback，避免 CJK 终端渲染问题。
-3. 接入“从选中节点生成追问 prompt”和“把新回答挂到选中节点”。
-4. 判断是否把 sidebar panel 从内部插件改造成外部 TUI plugin。
+```text
+opencode-host/packages/opencode
+```
+
+因此本机不再需要单独保留 `/Users/lqcmacmini/code/opencode-answer-tree-fork` 或 `/Users/lqcmacmini/code/opencode-upstream` 才能运行 1.0 版。

@@ -40,7 +40,7 @@ OpenCode command 不能像传统 CLI 一样直接解析参数并执行本地函�
 - `/tree-ask-current` 和 `/tree-attach-last` 是推荐的连续追问入口。
 - `/tree-ask`、`/tree-attach` 的参数解析由模型根据模板完成，复杂参数建议保持简单。
 
-如果后续要做到完全确定的命令行为，需要 fork OpenCode TUI 或等待插件 API 支持直接注册 slash command handler。
+当前 1.0 版已经把右侧 sidebar 集成进内置 OpenCode host。Slash command 仍然保留为手动入口，日常使用主要依赖 `answer-tree-auto` skill、Answer Tree tools 和右侧 sidebar。
 
 ## 自动 skill
 
@@ -53,8 +53,8 @@ OpenCode command 不能像传统 CLI 一样直接解析参数并执行本地函�
 作用：
 
 - 识别用户是否在追问当前 Answer Tree 节点。
-- 自动决定是否调用 `answer_tree_prompt_current`。
+- 自动决定是否调用 `answer_tree_prompt_auto` 或 `answer_tree_prompt_current`。
 - 对值得继续追问的回答，自动调用 `answer_tree_attach_last` 保存为子节点。
 - 对新的 standalone 长回答，自动调用 `answer_tree_create` 保存为根节点。
 
-这减少了用户手动输入 `/tree-ask-current` 和 `/tree-attach-last` 的频率，但仍然属于模型层规则。需要完全确定的自动保存时，应继续做 OpenCode 事件监听或 fork 内部集成。
+这减少了用户手动输入 `/tree-ask-current` 和 `/tree-attach-last` 的频率。需要注意：skill 属于模型层规则，真正的保存仍由 plugin tools 和 `message.updated` 事件完成。

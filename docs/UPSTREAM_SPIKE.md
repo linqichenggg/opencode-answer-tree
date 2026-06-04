@@ -2,6 +2,8 @@
 
 时间：2026-05-23
 
+状态：历史记录。这个 spike 的结论已经进入 1.0 版：当前仓库内的 `opencode-host/` 已包含右侧 Answer Tree sidebar。下面提到的 `/Users/lqcmacmini/code/opencode-answer-tree-fork` 和 `/Users/lqcmacmini/code/opencode-upstream` 是早期本地探索目录，普通使用者无需创建这些目录。
+
 ## 本地目录
 
 ```text
@@ -139,7 +141,7 @@ PATH="$HOME/.bun/bin:$PATH" \
 
 - `npm run typecheck` 通过。
 - `npm run smoke` 通过。
-- `npm test` 通过，13 pass / 0 fail。
+- `npm test` 通过，13 pass / 0 fail。这个数字是 2026-05-23 spike 当天记录；当前 1.0 验收见 `docs/VALIDATION.md`。
 - 上游目录结构已确认。
 - fork 改动范围保持在 sidebar 内部插件和 internal plugin registry。
 

@@ -1,6 +1,6 @@
 {
   "name": "opencode-answer-tree",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Answer tree workspace for nested follow-up questions in OpenCode and local CLI workflows.",
   "type": "module",
   "private": true,

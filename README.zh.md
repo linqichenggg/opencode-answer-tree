@@ -2,7 +2,7 @@
 
 [中文](README.zh.md) | [English](README.md)
 
-OpenCode Answer Tree 是一个带右侧回答树的 OpenCode 工作区。它把长回答保存成可追问的树节点，让你在多层追问和多个话题之间切换时，不需要反复翻聊天历史。
+OpenCode Answer Tree 是一个 1.0 版本的 OpenCode 工作区，右侧带回答树。它把长回答保存成可追问的树节点，让你在多层追问和多个话题之间切换时，不需要反复翻聊天历史。
 
 ![OpenCode Answer Tree sidebar showing multiple topics and nested follow-up nodes](docs/assets/answer-tree-sidebar.png)
 
@@ -33,6 +33,8 @@ Answer Tree 的目标是把普通聊天变成这种结构：
 
 - 自动保存长回答或结构化回答为根节点。
 - 明确追问当前节点时，自动保存为子节点。
+- 自动判断追问更适合挂到哪个父节点，默认优先使用 active context。
+- 跳过非常细节的问题，并把树深度限制在三层。
 - 同一个 session 支持多个根话题。
 - 右侧 Answer Tree sidebar 显示树、编号、selected 节点和 active context。
 - `j/k` 切换节点时，左侧聊天历史同步滚动到对应回答。
@@ -161,8 +163,17 @@ what is CNN
 展开第 2 点
 这里为什么这样设计
 上面那段是什么意思
-当前节点里的 QKV 是什么
 ```
+
+非常细节的问题会保留在聊天里，但不会继续生成树节点，例如：
+
+```text
+QKV 是什么
+这个符号是什么意思
+为什么这里是 0.2
+```
+
+子节点最多显示三层：`1`、`1.1`、`1.1.1`。更深的细节链会作为普通聊天继续，不会生成 `1.1.1.1`。
 
 当前底层保存阈值：
 

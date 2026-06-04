@@ -1,5 +1,20 @@
 # Self Review
 
+## 2026-06-05 Version 1.0 Review
+
+已检查：
+
+- 当前仓库是单仓库形态，内置 host 位于 `opencode-host/`。
+- `npm run opencode` 是带 Answer Tree sidebar 的启动入口。
+- `npm run validate` 是 1.0 主验收命令。
+- 文档已更新为当前形态：README、架构说明、验收记录、后续路线。
+
+关键结论：
+
+- 早期 `/Users/lqcmacmini/code/opencode-answer-tree-fork` 和 `/Users/lqcmacmini/code/opencode-upstream` 是开发探索目录，1.0 运行不依赖它们。
+- 右侧 sidebar、自动 skill、plugin tools、CLI/TUI viewer 已在当前仓库内收拢。
+- 后续工作重点是发布体验、自动判断质量、sidebar 搜索和导出复盘能力。
+
 ## 2026-05-23 TUI Viewer Review
 
 已检查：
