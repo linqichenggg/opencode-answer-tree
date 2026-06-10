@@ -36,6 +36,16 @@ Depth rule:
 
 Prefer quiet automation. Do not ask the user to manually call `answer_tree_*` tools unless a required tool is unavailable or the target node is ambiguous.
 
+Output discipline:
+
+- Never print internal planning, reasoning, or workflow narration.
+- Never start a visible message with `Thought:`.
+- Never explain that you are about to call a tool.
+- Never output the same answer twice.
+- The visible response should contain only:
+  1. the final answer once
+  2. one short Answer Tree status line when a tool was used or intentionally skipped
+
 ## Decision Rules
 
 Track the user message when at least one is true:
@@ -66,11 +76,11 @@ When unsure whether the user changed topic, prefer a new root node. Use the acti
 Use when the user asks a clear follow-up about the currently selected/active answer.
 
 1. Call `answer_tree_prompt_auto` with the user's question.
-2. Read the returned context path and use it to answer.
-3. If your answer is substantial enough to be useful as a future node, call `answer_tree_attach_last` with:
-   - `content`: the same assistant answer content you will give the user
+2. Read the returned context path and draft the answer silently. Do not print the draft yet.
+3. If the drafted answer is substantial enough to be useful as a future node, call `answer_tree_attach_last` with:
+   - `content`: the exact assistant answer content you will later show the user
    - `title`: a short, specific title, preferably 6-14 words
-4. Final response should include the answer. Add one short sentence that it was saved to Answer Tree only when useful.
+4. Final response should include the answer exactly once. Add one short Answer Tree status line.
 
 Skip step 3 when the answer is short, procedural, or not worth future follow-up.
 
@@ -89,11 +99,11 @@ Use when the user asks for a fresh long answer that is not a follow-up to an exi
 
 Use this workflow even if an active node exists, as long as the user asks about a different topic.
 
-1. Answer the user normally.
-2. If the answer is long or structured enough to become a root node, call `answer_tree_create` with:
-   - `content`: the answer content
+1. Draft the answer silently. Do not print the draft yet.
+2. If the drafted answer is long or structured enough to become a root node, call `answer_tree_create` with:
+   - `content`: the exact assistant answer content you will later show the user
    - `title`: a concise topic title
-3. Final response should include the answer and a short note that it was saved as a root Answer Tree node.
+3. Final response should include the answer exactly once. Add one short Answer Tree status line.
 
 Good root candidates:
 
@@ -115,8 +125,9 @@ Use when the user mentions a node id or asks to base a question on a visible nod
 1. If the node id is explicit, call `answer_tree_prompt` with that `nodeId` and the question.
 2. If the user asks to switch to a node by title or topic, call `answer_tree_use_match` with that title/topic before answering.
 3. If the user only describes the node title/section and there is ambiguity, call `answer_tree_use_match` first; if the result is still wrong or unclear, call `answer_tree_list` or ask one concise clarification.
-4. Answer using the returned path context.
-5. If substantial, call `answer_tree_attach_last` with the answer and title.
+4. Draft the answer silently using the returned path context.
+5. If substantial, call `answer_tree_attach_last` with the exact answer content and title.
+6. Final response should include the answer exactly once. Add one short Answer Tree status line.
 
 Again, `answer_tree_attach_last` is only for the assistant's answer after a question has already been recorded. It should not be the first Answer Tree tool in a follow-up.
 
@@ -168,13 +179,29 @@ answer_tree_delete
 
 ## User-Facing Behavior
 
-Do not expose tool mechanics unless the user asks. Good final wording:
+Keep the response clean for live demos. Do not expose reasoning or workflow mechanics. Show tool status only as a short final line.
+
+Good final shape:
 
 ```text
-已保存到 Answer Tree，作为当前节点的子回答。
+<formal answer, shown once>
+
+Answer Tree: saved as a child node via answer_tree_prompt_auto + answer_tree_attach_last.
 ```
 
-Keep this note short. The main answer still matters most.
+When a new root is saved:
+
+```text
+Answer Tree: saved as a root node via answer_tree_create.
+```
+
+When the answer is intentionally not saved:
+
+```text
+Answer Tree: not saved; this was a narrow detail answer.
+```
+
+Keep the status line short. The main answer still matters most.
 
 ## Failure Handling
 

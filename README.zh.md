@@ -189,6 +189,16 @@ Last answer: saved #ans_xxxxxxxx
 Last answer: skipped
 ```
 
+在聊天区里，推荐输出格式是：
+
+```text
+正式回答正文
+
+Answer Tree: saved as a child node via answer_tree_prompt_auto + answer_tree_attach_last.
+```
+
+也就是说：正文只显示一次，工具调用只显示一行简短状态，不展示模型内部思考过程。
+
 ## 数据保存位置
 
 Answer Tree 数据保存在项目目录：

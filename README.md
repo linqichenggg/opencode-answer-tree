@@ -189,6 +189,16 @@ Last answer: saved #ans_xxxxxxxx
 Last answer: skipped
 ```
 
+Recommended chat output shape:
+
+```text
+Final answer body
+
+Answer Tree: saved as a child node via answer_tree_prompt_auto + answer_tree_attach_last.
+```
+
+In other words, the answer should appear once, tool usage should be summarized in one short status line, and internal reasoning should stay hidden.
+
 ## Data Location
 
 OpenCode plugin data is stored in the project directory:
