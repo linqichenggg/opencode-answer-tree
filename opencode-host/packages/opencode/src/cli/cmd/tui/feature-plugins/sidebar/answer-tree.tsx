@@ -378,8 +378,8 @@ function View(props: {
                 <text fg={theme().textMuted} wrapMode="none">
                   Selected
                 </text>
-                <text fg={theme().text} wrapMode="none">
-                  {line().number} {truncate(line().title, 34)}
+                <text fg={theme().text}>
+                  {line().number} {line().title}
                 </text>
                 <text fg={theme().textMuted} wrapMode="none">
                   id: {line().id}
