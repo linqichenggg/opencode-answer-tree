@@ -85,7 +85,17 @@ export function Sidebar(props: {
                 </Show>
               </box>
             </TuiPluginRuntime.Slot>
-            <TuiPluginRuntime.Slot name="sidebar_content" session_id={props.sessionID} />
+            <TuiPluginRuntime.Slot
+              {...({
+                name: "sidebar_content",
+                session_id: props.sessionID,
+                sidebar_width: props.width,
+              } as {
+                name: "sidebar_content"
+                session_id: string
+                sidebar_width: number
+              })}
+            />
           </box>
         </scrollbox>
 

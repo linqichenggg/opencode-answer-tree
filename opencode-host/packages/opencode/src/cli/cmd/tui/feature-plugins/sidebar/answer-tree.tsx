@@ -62,10 +62,32 @@ type TreeLine = {
   createdAt?: string
 }
 
-function truncate(value: string, max: number): string {
-  const chars = Array.from(value)
-  if (chars.length <= max) return value
-  return chars.slice(0, Math.max(0, max - 1)).join("") + "…"
+function cellWidth(value: string): number {
+  let width = 0
+  for (const char of Array.from(value)) {
+    const code = char.codePointAt(0) ?? 0
+    width += code > 0x1100 ? 2 : 1
+  }
+  return width
+}
+
+function truncate(value: string, maxCells: number): string {
+  if (cellWidth(value) <= maxCells) return value
+  let width = 0
+  let output = ""
+  const limit = Math.max(0, maxCells - 1)
+  for (const char of Array.from(value)) {
+    const nextWidth = codePointWidth(char)
+    if (width + nextWidth > limit) break
+    output += char
+    width += nextWidth
+  }
+  return output + "…"
+}
+
+function codePointWidth(value: string): number {
+  const code = value.codePointAt(0) ?? 0
+  return code > 0x1100 ? 2 : 1
 }
 
 function candidateDirectories(directory: string | undefined): string[] {
@@ -254,6 +276,7 @@ function View(props: {
   refresh: () => number
   bumpRefresh: () => void
   modeActive: () => boolean
+  sidebarWidth?: number
 }) {
   const [open, setOpen] = createSignal(true)
   const theme = () => props.api.theme.current
@@ -270,7 +293,13 @@ function View(props: {
   const currentSelectedNodeId = createMemo(() => lines()[currentSelectedIndex()]?.id)
   const currentSelectedLine = createMemo(() => lines()[currentSelectedIndex()])
   const activeLine = createMemo(() => lines().find((line) => line.active))
-  const titleMax = (line: TreeLine) => Math.max(10, 31 - Array.from(`${line.prefix}${line.number} `).length)
+  const contentWidth = createMemo(() => Math.max(20, (props.sidebarWidth ?? 36) - 5))
+  const titleMax = (line: TreeLine) => {
+    const markerWidth = 2
+    const foldWidth = 2
+    const staticWidth = markerWidth + cellWidth(line.prefix) + foldWidth + cellWidth(`${line.number} `)
+    return Math.max(8, contentWidth() - staticWidth)
+  }
   let lastSyncedActiveNodeId: string | undefined
 
   createEffect(() => {
@@ -605,6 +634,7 @@ const tui: TuiPlugin = async (api) => {
     order: 450,
     slots: {
       sidebar_content(_ctx, props) {
+        const slotProps = props as typeof props & { sidebar_width?: number }
         currentSessionID = props.session_id
         return (
           <View
@@ -617,6 +647,7 @@ const tui: TuiPlugin = async (api) => {
             refresh={refresh}
             bumpRefresh={bumpRefresh}
             modeActive={modeActive}
+            sidebarWidth={slotProps.sidebar_width}
           />
         )
       },
