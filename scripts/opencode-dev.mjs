@@ -23,7 +23,8 @@ const env = {
   PATH: `${process.env.HOME}/.bun/bin:${process.env.PATH ?? ""}`,
 };
 
-const args = ["run", "--cwd", hostRoot, "dev", projectRoot];
+const targetDirectory = resolve(process.argv[2] ?? process.cwd());
+const args = ["run", "--cwd", hostRoot, "dev", targetDirectory];
 if (process.env.ANSWER_TREE_OPENCODE_PRINT_LOGS === "1") {
   args.push("--print-logs", "--log-level", "INFO");
 }
@@ -32,7 +33,7 @@ const child = spawn(
   "bun",
   args,
   {
-    detached: true,
+    detached: false,
     stdio: "inherit",
     env,
   },
@@ -71,11 +72,6 @@ function killTree(pid, signal = "SIGTERM") {
 
 function killChild(signal = "SIGTERM") {
   if (!child.pid) return;
-  try {
-    process.kill(-child.pid, signal);
-  } catch {
-    // The process group may already be gone. Fall back to walking children.
-  }
   killTree(child.pid, signal);
 }
 
@@ -88,15 +84,7 @@ function shutdown(signal) {
 
 function forwardResize() {
   if (!child.pid || shuttingDown) return;
-  try {
-    process.kill(-child.pid, "SIGWINCH");
-  } catch {
-    try {
-      process.kill(child.pid, "SIGWINCH");
-    } catch {
-      // The child process may have exited between resize events.
-    }
-  }
+  killTree(child.pid, "SIGWINCH");
 }
 
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
