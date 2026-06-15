@@ -1,14 +1,16 @@
 <!--
 Qiita title:
-OpenCodeにAnswer Treeを追加して、LLMの長い回答と追問をツリーで管理できるようにした
+LLMの長い回答と深掘り質問をツリー構造で管理する - OpenCode向けに「Answer Tree sidebar」を開発した
 
 Tags:
-OpenCode, AIエージェント, LLM, TypeScript, 個人開発
+OpenCode, LLM, AI, AIエージェント, 要約
 -->
 
 ## はじめに
 
 LLM を使って調べ物や実装相談をしていると、1つの回答が長くなることがあります。
+
+![会話を整理し、構造にする。](https://raw.githubusercontent.com/linqichenggg/opencode-answer-tree/main/docs/assets/image-tree.png)
 
 長い回答そのものは便利ですが、その後に深掘りしていくと、次のような問題が起きます。
 
